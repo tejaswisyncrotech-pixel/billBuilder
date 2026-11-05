@@ -106,3 +106,4 @@ Invoice-builder/
 │       └── deploy.yml         # GitHub Pages automated deployment workflow
 └── README.md                  # Documentation and hosting guide
 ```
+

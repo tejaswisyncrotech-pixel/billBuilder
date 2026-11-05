@@ -71,3 +71,4 @@ export const defaultInvoiceData = {
   signatoryText: "Syncrotech Technologies LLP",
   signatureImage: ""
 };
+

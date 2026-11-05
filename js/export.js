@@ -359,3 +359,4 @@ function formatDisplayDate(dateStr) {
   const year = d.getFullYear();
   return `${day}-${month}-${year}`;
 }
+

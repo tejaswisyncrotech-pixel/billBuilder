@@ -114,3 +114,4 @@ export function amountToWords(amount, currencySymbol = "₹") {
   result += " Only";
   return result;
 }
+
