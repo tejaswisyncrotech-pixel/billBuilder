@@ -366,6 +366,7 @@ body {
     max-width: none !important;
     min-height: 0 !important;
     margin: 0 !important;
+    margin-bottom: 0 !important;
     padding: 0 !important;
     box-shadow: none !important;
     border: none !important;

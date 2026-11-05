@@ -1,83 +1,117 @@
 /**
  * Universal Invoice Export & Sharing Suite
- * - Mobile/Tablet/Desktop robust A4 PDF generation using off-screen clone
- * - Native PDF File Sharing via Web Share API (share actual PDF to WhatsApp/Email/AirDrop)
- * - Fallback Share Modal with WhatsApp, Email & Clipboard
+ * - Reliable A4 PDF generation (fixes blank canvas & scaling issues)
+ * - Direct PDF File Sharing via Web Share API
+ * - Interactive Share Modal with WhatsApp, Email & Clipboard
  * - Word (.doc) document export with full table styling
- * - Direct Print Engine
+ * - Direct Print Engine with guaranteed visibility
  */
 
 /**
- * Creates an exact A4 off-screen clone of the invoice paper.
- * This guarantees that whether the user is on Mobile, Tablet, or Desktop,
- * or even on the 'Edit' tab where preview is hidden, the PDF is ALWAYS
- * rendered in pristine vector A4 dimensions (210mm x 297mm).
+ * Creates an exact A4 staging container placed at (0,0) in the viewport.
+ * html2canvas REQUIRES the element to be in-viewport (x >= 0, y >= 0) and not display:none.
+ * We position it at (0,0) with high z-index, capture it in ~200ms, and immediately remove it.
  */
-export function createPrintableClone(invoiceElement) {
+function createStagingContainer(invoiceElement) {
+  const wrapper = document.createElement("div");
+  wrapper.id = "pdf-staging-wrapper";
+  wrapper.style.position = "fixed";
+  wrapper.style.left = "0";
+  wrapper.style.top = "0";
+  wrapper.style.width = "794px"; // 210mm at 96 DPI
+  wrapper.style.minHeight = "1123px"; // 297mm at 96 DPI
+  wrapper.style.backgroundColor = "#ffffff";
+  wrapper.style.zIndex = "999999";
+  wrapper.style.overflow = "visible";
+  wrapper.style.margin = "0";
+  wrapper.style.padding = "0";
+  wrapper.style.boxSizing = "border-box";
+
+  // Clone the invoice element
   const clone = invoiceElement.cloneNode(true);
-  clone.id = "invoice-clone-for-print";
-  clone.classList.add("template-classic");
-  
-  // Enforce absolute A4 dimensions and reset any responsive transforms
-  clone.style.width = "210mm";
-  clone.style.minHeight = "297mm";
-  clone.style.maxWidth = "none";
+  clone.id = "invoice-clone-render";
+  clone.className = "invoice-paper template-classic";
+
+  // Reset any mobile responsive scale/margins on the clone
   clone.style.transform = "none";
   clone.style.margin = "0";
-  clone.style.padding = "18mm 16mm 20mm 16mm";
-  clone.style.background = "#ffffff";
-  clone.style.color = "#0f172a";
+  clone.style.marginBottom = "0";
+  clone.style.width = "794px";
+  clone.style.minHeight = "1123px";
+  clone.style.padding = "45px 42px 48px 42px";
   clone.style.boxShadow = "none";
   clone.style.border = "none";
-  clone.style.position = "fixed";
-  clone.style.left = "-9999px";
-  clone.style.top = "0";
-  clone.style.zIndex = "-9999";
+  clone.style.background = "#ffffff";
+  clone.style.color = "#0f172a";
   clone.style.display = "flex";
   clone.style.flexDirection = "column";
   clone.style.justifyContent = "space-between";
+  clone.style.boxSizing = "border-box";
 
-  document.body.appendChild(clone);
-  return clone;
+  wrapper.appendChild(clone);
+  return wrapper;
 }
 
 /**
- * Generate PDF Blob from invoice element
+ * Standard html2pdf options for crisp A4 vector output
+ */
+function getPdfOptions(safeFilename) {
+  return {
+    margin: [0, 0, 0, 0],
+    filename: safeFilename,
+    image: { type: "jpeg", quality: 0.98 },
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      letterRendering: true,
+      windowWidth: 794,
+      width: 794,
+      scrollX: 0,
+      scrollY: 0
+    },
+    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
+  };
+}
+
+/**
+ * Generate PDF Blob from invoice element (used for sharing)
  * @returns {Promise<Blob|null>}
  */
 export async function generatePdfBlob(invoiceElement, invoiceNumber = "Invoice") {
   const safeFilename = `Invoice_${String(invoiceNumber).replace(/[\/\\: ]/g, "_")}.pdf`;
-  const clone = createPrintableClone(invoiceElement);
+
+  if (typeof window.html2pdf !== "function") {
+    console.warn("html2pdf library is not loaded.");
+    return null;
+  }
+
+  const staging = createStagingContainer(invoiceElement);
+  document.body.appendChild(staging);
 
   try {
-    if (typeof window.html2pdf === "function") {
-      const opt = {
-        margin: 0,
-        filename: safeFilename,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          letterRendering: true,
-          windowWidth: 1024,
-          scrollX: 0,
-          scrollY: 0
-        },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
-      };
+    // Allow browser a brief tick to layout the staging DOM
+    await new Promise((r) => setTimeout(r, 120));
 
-      const pdfBlob = await window.html2pdf().set(opt).from(clone).outputPdf("blob");
-      return pdfBlob;
-    } else {
-      return null;
+    const opt = getPdfOptions(safeFilename);
+    const worker = window.html2pdf().set(opt).from(staging.firstElementChild);
+
+    let blob = null;
+    try {
+      blob = await worker.output("blob");
+    } catch (e1) {
+      // Fallback via toPdf().get('pdf')
+      const pdfObj = await worker.toPdf().get("pdf");
+      blob = pdfObj.output("blob");
     }
+
+    return blob;
   } catch (err) {
-    console.error("PDF generation failed:", err);
+    console.error("PDF Blob generation failed:", err);
     return null;
   } finally {
-    if (clone && clone.parentNode) {
-      clone.parentNode.removeChild(clone);
+    if (staging && staging.parentNode) {
+      staging.parentNode.removeChild(staging);
     }
   }
 }
@@ -88,27 +122,33 @@ export async function generatePdfBlob(invoiceElement, invoiceNumber = "Invoice")
 export async function downloadPDF(invoiceElement, invoiceNumber = "Invoice") {
   const safeFilename = `Invoice_${String(invoiceNumber).replace(/[\/\\: ]/g, "_")}.pdf`;
 
-  const blob = await generatePdfBlob(invoiceElement, invoiceNumber);
-  if (blob) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = safeFilename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-    return true;
+  if (typeof window.html2pdf === "function") {
+    const staging = createStagingContainer(invoiceElement);
+    document.body.appendChild(staging);
+
+    try {
+      await new Promise((r) => setTimeout(r, 120));
+      const opt = getPdfOptions(safeFilename);
+      await window.html2pdf().set(opt).from(staging.firstElementChild).save();
+      return true;
+    } catch (err) {
+      console.warn("html2pdf save failed, falling back to window.print():", err);
+      printInvoice();
+      return false;
+    } finally {
+      if (staging && staging.parentNode) {
+        staging.parentNode.removeChild(staging);
+      }
+    }
   } else {
-    // Fallback to browser print engine if html2pdf is unavailable
-    window.print();
+    // Direct browser print engine fallback
+    printInvoice();
     return false;
   }
 }
 
 /**
- * Share PDF directly via Web Share API (attaches actual .pdf file on mobile)
- * or opens the Share Modal if file sharing is not supported by browser.
+ * Share PDF directly via Web Share API or open Share Modal
  */
 export async function sharePdfInvoice(invoiceElement, data, calc, onStatusChange) {
   const filename = `Invoice_${String(data.invoiceNumber || "Invoice").replace(/[\/\\: ]/g, "_")}.pdf`;
@@ -116,16 +156,15 @@ export async function sharePdfInvoice(invoiceElement, data, calc, onStatusChange
 
   if (onStatusChange) onStatusChange("Generating PDF for sharing...", true);
 
-  // 1. Generate the actual PDF Blob
+  // 1. Generate the PDF Blob
   const blob = await generatePdfBlob(invoiceElement, data.invoiceNumber);
 
   if (onStatusChange) onStatusChange("", false);
 
   if (blob) {
-    // Create actual PDF file object
+    // 2. Check if browser can share files directly (iOS Safari, Android Chrome, etc.)
     const pdfFile = new File([blob], filename, { type: "application/pdf" });
 
-    // 2. Check if browser can share files directly (iOS Safari, Android Chrome, etc.)
     if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
       try {
         await navigator.share({
@@ -138,11 +177,11 @@ export async function sharePdfInvoice(invoiceElement, data, calc, onStatusChange
         if (err.name === "AbortError") {
           return { success: false, method: "cancelled" };
         }
-        console.warn("Native file share failed, falling back to Share Modal:", err);
+        console.warn("Native file share failed, opening share modal:", err);
       }
     }
 
-    // 3. If file share wasn't supported, trigger auto-download of the PDF
+    // 3. Fallback: Save PDF and open Share Modal with WhatsApp & Email options
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -152,11 +191,10 @@ export async function sharePdfInvoice(invoiceElement, data, calc, onStatusChange
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 2000);
 
-    // 4. Open the friendly Share Modal with WhatsApp, Email & Copy options
     openShareModal(data, calc, filename, true);
     return { success: true, method: "modal_with_download" };
   } else {
-    // Fallback if PDF generation fails
+    // Fallback if Blob creation fails
     openShareModal(data, calc, filename, false);
     return { success: false, method: "modal_fallback" };
   }
@@ -168,7 +206,6 @@ export async function sharePdfInvoice(invoiceElement, data, calc, onStatusChange
 export function openShareModal(data, calc, filename, pdfDownloaded = false) {
   const modal = document.getElementById("modal-share");
   if (!modal) {
-    // Fallback directly to WhatsApp if modal doesn't exist
     shareViaWhatsApp(data, calc);
     return;
   }
@@ -180,7 +217,7 @@ export function openShareModal(data, calc, filename, pdfDownloaded = false) {
   if (titleEl) titleEl.textContent = `Share Invoice #${data.invoiceNumber || ""}`;
   if (noteEl) {
     if (pdfDownloaded) {
-      noteEl.innerHTML = `✅ <strong>${filename}</strong> has been saved to your device. You can now attach it or send the summary below!`;
+      noteEl.innerHTML = `✅ <strong>${filename}</strong> downloaded to your device! You can now send it on WhatsApp or Email.`;
       noteEl.classList.remove("hidden");
     } else {
       noteEl.classList.add("hidden");
@@ -284,6 +321,7 @@ export function downloadDOC(data, calc) {
         }
         h1 { font-size: 24pt; margin: 0 0 10pt 0; text-align: center; font-weight: normal; }
         table { border-collapse: collapse; width: 100%; margin-top: 12pt; }
+        .meta-table td { border: none; padding: 2px 4px; font-size: 10pt; }
         .query-box {
           background-color: #d8edf8;
           border: 1px solid #bce8f1;
@@ -456,6 +494,9 @@ export function formatShareSummary(data, calc) {
 ${data.queryBanner ? `${data.queryBanner}\n` : ""}${data.thankYouMessage || "THANK YOU FOR YOUR BUSINESS...!"}`;
 }
 
+/**
+ * Trigger print dialog with print-specific stylesheet
+ */
 export function printInvoice() {
   window.print();
 }
