@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice Builder - Responsive GST Ready</title>
+  <meta name="description" content="Simple, fast, and responsive invoice builder web app with automated GST calculations, PDF/DOC export, and GitHub Pages support.">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- External Libraries: html2pdf & qrcode -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- Top App Navigation Bar -->
+  <header id="app-header" class="no-print bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-sky-600 text-white flex items-center justify-center font-bold text-xl shadow-md">
+          🧾
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">Invoice Builder</h1>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-500 hidden sm:inline">GST Ready & Universal</span>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">Free & Offline</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Controls & Actions -->
+      <div class="flex items-center gap-2 sm:gap-3">
+
+        <!-- Template Selector -->
+        <div class="hidden md:flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 p-1 rounded-lg border border-slate-200">
+          <label for="template-select" class="font-medium pl-1 text-slate-500">Theme:</label>
+          <select id="template-select" class="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer">
+            <option value="classic">Classic (Sample Match)</option>
+            <option value="modern">Modern Clean</option>
+            <option value="minimal">Minimalist</option>
+          </select>
+        </div>
+
+        <!-- Currency Selector -->
+        <div class="flex items-center gap-1 text-xs text-slate-600 bg-slate-50 p-1 rounded-lg border border-slate-200">
+          <label for="currency-select" class="font-medium pl-1 text-slate-500">Cur:</label>
+          <select id="currency-select" class="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer">
+            <option value="₹">₹ (INR)</option>
+            <option value="$">$ (USD)</option>
+            <option value="€">€ (EUR)</option>
+            <option value="£">£ (GBP)</option>
+            <option value="AED">AED</option>
+          </select>
+        </div>
+
+        <!-- History / Saved Drafts -->
+        <button id="btn-history" type="button" class="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1" title="Saved Invoices History">
+          <span>📁</span>
+          <span class="hidden sm:inline">History</span>
+        </button>
+
+        <!-- Reset to Sample Data -->
+        <button id="btn-reset-sample" type="button" class="px-2.5 py-1.5 text-xs font-semibold rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1" title="Reset to Sample Invoice">
+          <span>🔄</span>
+          <span class="hidden sm:inline">Reset</span>
+        </button>
+
+        <!-- Export Buttons (Desktop / Tablet) -->
+        <div class="hidden sm:flex items-center gap-2">
+          <!-- DOC File Download -->
+          <button id="btn-download-doc" type="button" class="px-3 py-1.5 text-xs font-bold rounded-lg text-sky-800 bg-sky-100 hover:bg-sky-200 transition-colors flex items-center gap-1.5 shadow-sm">
+            <span>📝</span>
+            <span>Word DOC</span>
+          </button>
+
+          <!-- PDF Download -->
+          <button id="btn-download-pdf" type="button" class="px-3.5 py-1.5 text-xs font-bold rounded-lg text-white bg-sky-600 hover:bg-sky-700 transition-all flex items-center gap-1.5 shadow-sm hover:shadow">
+            <span>📄</span>
+            <span>Download PDF</span>
+          </button>
+
+          <!-- Share / WhatsApp -->
+          <button id="btn-share" type="button" class="px-3 py-1.5 text-xs font-bold rounded-lg text-emerald-800 bg-emerald-100 hover:bg-emerald-200 transition-colors flex items-center gap-1.5">
+            <span>📲</span>
+            <span class="hidden md:inline">Share</span>
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Mobile & Tablet Tab Bar (Toggles Editor vs Live Preview) -->
+  <div id="mobile-tabs" class="no-print lg:hidden bg-white border-b border-slate-200 px-4 py-2 sticky top-16 z-30 shadow-sm flex items-center justify-center">
+    <div class="grid grid-cols-2 gap-1 w-full max-w-md bg-slate-100 p-1 rounded-xl">
+      <button id="tab-btn-editor" type="button" class="py-2 text-xs font-bold rounded-lg transition-all text-sky-700 bg-white shadow-sm flex items-center justify-center gap-1.5">
+        <span>✏️</span> Edit Invoice
+      </button>
+      <button id="tab-btn-preview" type="button" class="py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5">
+        <span>👁️</span> Live Preview
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Work Area -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 main-content-container">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      
+      <!-- ====================================================================
+           LEFT PANE: INVOICE FORM EDITOR
+           ==================================================================== -->
+      <section id="editor-pane" class="lg:col-span-5 space-y-4">
+
+        <!-- Card 1: Invoice Meta (Title, Number, Dates) -->
+        <div class="form-section-card">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+            <h2 class="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+              <span>📌</span> Invoice Details
+            </h2>
+            <span class="text-[11px] text-slate-400 font-medium">Header Meta</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="form-label" for="input-invoice-title">Document Title</label>
+              <input type="text" id="input-invoice-title" class="form-input" placeholder="Invoice" value="Invoice">
+            </div>
+            <div>
+              <label class="form-label" for="input-invoice-number">Invoice No.</label>
+              <input type="text" id="input-invoice-number" class="form-input font-mono font-semibold" placeholder="e.g. 26/01/10" value="26/01/10">
+            </div>
+            <div>
+              <label class="form-label" for="input-invoice-date">Invoice Date</label>
+              <input type="date" id="input-invoice-date" class="form-input">
+            </div>
+            <div>
+              <label class="form-label" for="input-due-date">Due Date <span class="text-slate-400 font-normal">(Optional)</span></label>
+              <input type="date" id="input-due-date" class="form-input">
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: Company (Sender) Information -->
+        <div class="form-section-card">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+            <h2 class="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+              <span>🏢</span> Your Business (Sender)
+            </h2>
+            <label class="text-xs text-sky-600 font-medium cursor-pointer hover:underline flex items-center gap-1">
+              <span>📷 Logo</span>
+              <input type="file" id="input-company-logo" accept="image/*" class="hidden">
+            </label>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label class="form-label" for="input-company-name">Company / Business Name</label>
+              <input type="text" id="input-company-name" class="form-input font-semibold" placeholder="SYNCROTECH TECHNOLOGIES LLP">
+            </div>
+            <div>
+              <label class="form-label" for="input-company-address">Company Address</label>
+              <textarea id="input-company-address" rows="2" class="form-textarea" placeholder="Shitala Nagar 2&#10;Dehuraod, Pune 412101"></textarea>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="form-label" for="input-company-phone">Mobile / Phone</label>
+                <input type="text" id="input-company-phone" class="form-input" placeholder="+919834265385">
+              </div>
+              <div>
+                <label class="form-label" for="input-company-email">E-mail</label>
+                <input type="email" id="input-company-email" class="form-input" placeholder="info@syncrotech.in">
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="form-label" for="input-company-gstin">GSTIN <span class="text-slate-400 font-normal">(Optional)</span></label>
+                <input type="text" id="input-company-gstin" class="form-input font-mono uppercase text-xs" placeholder="e.g. 27AAAAA0000A1Z5" maxlength="15">
+              </div>
+              <div>
+                <label class="form-label" for="input-company-pan">PAN <span class="text-slate-400 font-normal">(Optional)</span></label>
+                <input type="text" id="input-company-pan" class="form-input font-mono uppercase text-xs" placeholder="ABCDE1234F" maxlength="10">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3: Client (Bill To) Information -->
+        <div class="form-section-card">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+            <h2 class="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+              <span>👤</span> Bill To (Client)
+            </h2>
+            <span class="text-[11px] text-slate-400 font-medium">Customer Details</span>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label class="form-label" for="input-client-name">Client / Customer Name</label>
+              <input type="text" id="input-client-name" class="form-input font-semibold" placeholder="Elysian Elevators">
+            </div>
+            <div>
+              <label class="form-label" for="input-client-address">Billing Address</label>
+              <textarea id="input-client-address" rows="2" class="form-textarea" placeholder="Moshi Pradhikaran 411026"></textarea>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="form-label" for="input-client-phone">Contact No. <span class="text-slate-400 font-normal">(Opt)</span></label>
+                <input type="text" id="input-client-phone" class="form-input" placeholder="+91...">
+              </div>
+              <div>
+                <label class="form-label" for="input-client-gstin">Client GSTIN <span class="text-slate-400 font-normal">(Opt)</span></label>
+                <input type="text" id="input-client-gstin" class="form-input font-mono uppercase text-xs" placeholder="Client GSTIN" maxlength="15">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 4: Dynamic Line Items -->
+        <div class="form-section-card">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+            <h2 class="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+              <span>📦</span> Line Items & Services
+            </h2>
+            <button id="btn-add-item" type="button" class="px-2.5 py-1 text-xs font-bold text-sky-600 bg-sky-50 hover:bg-sky-100 rounded-lg border border-sky-200 transition-colors flex items-center gap-1">
+              <span>+</span> Add Item
+            </button>
+          </div>
+
+          <!-- Items Container -->
+          <div id="items-container" class="space-y-3">
+            <!-- Dynamic item cards will be injected here by app.js -->
+          </div>
+        </div>
+
+        <!-- Card 5: GST & Tax Calculation Engine -->
+        <div class="form-section-card bg-gradient-to-br from-white to-sky-50/40">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+            <div class="flex items-center gap-2">
+              <span class="text-base">🧮</span>
+              <div>
+                <h2 class="font-bold text-sm text-slate-800">GST & Tax Calculations</h2>
+                <p class="text-[11px] text-slate-500">Intra-State (CGST+SGST) or Inter-State (IGST)</p>
+              </div>
+            </div>
+
+            <!-- Tax Enable Toggle -->
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="toggle-gst" class="sr-only peer">
+              <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-600"></div>
+            </label>
+          </div>
+
+          <!-- GST Controls (Visible when GST is enabled) -->
+          <div id="gst-controls" class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="form-label" for="select-gst-rate">GST Slab Rate</label>
+                <select id="select-gst-rate" class="form-select font-semibold">
+                  <option value="18">18% (Standard Services/Goods)</option>
+                  <option value="12">12% (IT Hardware/Goods)</option>
+                  <option value="5">5% (Essential Goods)</option>
+                  <option value="28">28% (Luxury/Special)</option>
+                  <option value="0">0% (Nil Rated)</option>
+                  <option value="custom">Custom %</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="form-label" for="select-gst-mode">Tax Mode</label>
+                <select id="select-gst-mode" class="form-select font-semibold">
+                  <option value="intra">Intra-State (CGST + SGST)</option>
+                  <option value="inter">Inter-State (IGST)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Custom GST input if selected -->
+            <div id="custom-gst-wrap" class="hidden">
+              <label class="form-label" for="input-custom-gst">Enter Custom GST Rate (%)</label>
+              <input type="number" id="input-custom-gst" class="form-input" min="0" max="100" step="0.1" value="18">
+            </div>
+
+            <!-- Inclusive / Exclusive Tax -->
+            <div class="flex items-center justify-between pt-1">
+              <label for="check-tax-inclusive" class="text-xs text-slate-700 cursor-pointer flex items-center gap-2">
+                <input type="checkbox" id="check-tax-inclusive" class="rounded text-sky-600 focus:ring-sky-500">
+                <span>Unit prices already include GST</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Discount & Rounding Section -->
+          <div class="mt-4 pt-3 border-t border-slate-200/80 space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="form-label" for="input-discount-val">Discount (Optional)</label>
+                <div class="flex">
+                  <input type="number" id="input-discount-val" class="form-input rounded-r-none" min="0" step="any" placeholder="0">
+                  <select id="select-discount-type" class="form-select rounded-l-none border-l-0 w-20 text-xs font-semibold bg-slate-50">
+                    <option value="flat">₹ Flat</option>
+                    <option value="percent">% Off</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="flex flex-col justify-end">
+                <label for="check-round-off" class="text-xs text-slate-700 cursor-pointer flex items-center gap-2 p-2 rounded-lg bg-white border border-slate-200">
+                  <input type="checkbox" id="check-round-off" checked class="rounded text-sky-600 focus:ring-sky-500">
+                  <span class="font-medium">Auto Round-off (₹)</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 6: Notes, Terms, Query Banner & Signature -->
+        <div class="form-section-card">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+            <h2 class="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+              <span>📝</span> Terms, Notes & Signature
+            </h2>
+            <span class="text-[11px] text-slate-400 font-medium">Warranty & Footer</span>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label class="form-label" for="input-notes">Notes / Warranty Clauses</label>
+              <textarea id="input-notes" rows="2" class="form-textarea" placeholder="15 Days Laptop Warranty.&#10;6 Month charger warranty"></textarea>
+            </div>
+
+            <div>
+              <label class="form-label" for="input-query-banner">Query / Support Banner</label>
+              <input type="text" id="input-query-banner" class="form-input text-xs" placeholder="If you have any query, please reach out to us on (+91) 9834265385 or info@syncrotech.in">
+            </div>
+
+            <div>
+              <label class="form-label" for="input-thank-you">Closing Greeting</label>
+              <input type="text" id="input-thank-you" class="form-input font-bold" placeholder="THANK YOU FOR YOUR BUSINESS...!">
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 pt-1">
+              <div>
+                <label class="form-label" for="input-signatory">Authorized Signatory</label>
+                <input type="text" id="input-signatory" class="form-input" placeholder="Syncrotech Technologies LLP">
+              </div>
+              <div>
+                <label class="form-label">Signature Stamp</label>
+                <label class="w-full flex items-center justify-center p-2 border border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 text-xs text-slate-500">
+                  <span>🖋️ Upload Signature</span>
+                  <input type="file" id="input-signature-img" accept="image/*" class="hidden">
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 7: Optional UPI QR & Bank Account Details -->
+        <div class="form-section-card">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+            <div class="flex items-center gap-2">
+              <span class="text-base">💳</span>
+              <h2 class="font-bold text-sm text-slate-800">Bank Details & UPI QR Code</h2>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="toggle-bank" class="sr-only peer">
+              <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-600"></div>
+            </label>
+          </div>
+
+          <div id="bank-controls" class="space-y-3 hidden">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="form-label" for="input-bank-name">Bank Name</label>
+                <input type="text" id="input-bank-name" class="form-input" placeholder="HDFC Bank">
+              </div>
+              <div>
+                <label class="form-label" for="input-account-number">A/C Number</label>
+                <input type="text" id="input-account-number" class="form-input font-mono" placeholder="50200012345678">
+              </div>
+              <div>
+                <label class="form-label" for="input-ifsc-code">IFSC Code</label>
+                <input type="text" id="input-ifsc-code" class="form-input font-mono uppercase" placeholder="HDFC0001234">
+              </div>
+              <div>
+                <label class="form-label" for="input-upi-id">UPI ID (For Instant QR)</label>
+                <input type="text" id="input-upi-id" class="form-input font-mono" placeholder="9834265385@upi">
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-500 italic">Generates a scannable Google Pay/PhonePe/Paytm QR code with pre-filled invoice amount.</p>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ====================================================================
+           RIGHT PANE: LIVE INTERACTIVE INVOICE PREVIEW (A4 PAPER)
+           ==================================================================== -->
+      <section id="preview-pane" class="lg:col-span-7 flex flex-col items-center">
+        
+        <!-- Preview Action Ribbon -->
+        <div class="no-print w-full flex items-center justify-between pb-3 px-1 text-xs text-slate-500">
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span class="font-medium text-slate-700">Live Preview</span>
+            <span class="text-slate-400">| A4 Print Ratio (210mm × 297mm)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btn-print-direct" type="button" class="hover:text-sky-600 transition-colors flex items-center gap-1 font-semibold">
+              <span>🖨️</span> Print Direct
+            </button>
+          </div>
+        </div>
+
+        <!-- A4 Invoice Paper Simulation -->
+        <div class="invoice-paper-wrapper">
+          <div id="invoice-preview" class="invoice-paper template-classic">
+            
+            <!-- Paper Top Section -->
+            <div>
+              <!-- Invoice Title -->
+              <h1 id="preview-title" class="invoice-header-title">Invoice</h1>
+
+              <!-- Header Row: Company Details & Invoice Meta -->
+              <div class="flex justify-between items-start mb-6">
+                
+                <!-- Left: Company (Sender) Information -->
+                <div class="w-7/12 pr-4">
+                  <!-- Optional Logo -->
+                  <div id="preview-logo-wrap" class="mb-2 hidden">
+                    <img id="preview-logo-img" src="" alt="Company Logo" class="max-h-16 max-w-[180px] object-contain">
+                  </div>
+                  
+                  <div id="preview-company-name" class="company-name">SYNCROTECH TECHNOLOGIES LLP</div>
+                  <div id="preview-company-address" class="text-[13px] text-slate-800 whitespace-pre-line leading-relaxed">Shitala Nagar 2
+Dehuraod, Pune 412101</div>
+                  
+                  <div id="preview-company-phone-wrap" class="text-[13px] text-slate-800 mt-1">
+                    Mob. No: <span id="preview-company-phone">+919834265385</span>
+                  </div>
+                  <div id="preview-company-email-wrap" class="text-[13px] text-slate-800">
+                    E-mail: <span id="preview-company-email">info@syncrotech.in</span>
+                  </div>
+                  <div id="preview-company-gstin-wrap" class="text-[13px] text-slate-800 hidden font-mono">
+                    GSTIN: <span id="preview-company-gstin"></span>
+                  </div>
+                </div>
+
+                <!-- Right: Invoice Metadata Box -->
+                <div class="w-5/12 text-right">
+                  <div class="inline-block text-left text-[13.5px]">
+                    <div class="grid grid-cols-[100px_auto] gap-x-3 py-0.5">
+                      <span class="font-bold text-slate-900">Invoice No:</span>
+                      <span id="preview-invoice-no" class="text-right font-medium text-slate-900">26/01/10</span>
+                    </div>
+                    <div class="grid grid-cols-[100px_auto] gap-x-3 py-0.5">
+                      <span class="font-bold text-slate-900">Date:</span>
+                      <span id="preview-invoice-date" class="text-right font-medium text-slate-900">19-Jan-2026</span>
+                    </div>
+                    <div id="preview-due-date-wrap" class="grid grid-cols-[100px_auto] gap-x-3 py-0.5 hidden">
+                      <span class="font-bold text-slate-900">Due Date:</span>
+                      <span id="preview-due-date" class="text-right font-medium text-slate-900"></span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Bill To Section -->
+              <div class="mb-5 text-[13.5px]">
+                <div class="bill-to-title">Bill To:</div>
+                <div id="preview-client-name" class="bill-to-name">Elysian Elevators</div>
+                <div id="preview-client-address" class="text-slate-800 whitespace-pre-line leading-relaxed">Moshi Pradhikaran 411026</div>
+                <div id="preview-client-phone-wrap" class="text-slate-800 hidden">
+                  Contact: <span id="preview-client-phone"></span>
+                </div>
+                <div id="preview-client-gstin-wrap" class="text-slate-800 hidden font-mono">
+                  GSTIN: <span id="preview-client-gstin"></span>
+                </div>
+              </div>
+
+              <!-- Main Items Table (Classic Boxed Format matching sample) -->
+              <table class="classic-table">
+                <thead>
+                  <tr>
+                    <th class="text-left w-6/12">DESCRIPTION</th>
+                    <th class="text-right w-2/12">Amount</th>
+                    <th class="text-center w-2/12">Quantity</th>
+                    <th class="text-right w-2/12">Total</th>
+                  </tr>
+                </thead>
+                <tbody id="preview-table-body">
+                  <!-- Dynamic Item Rows Injected Here -->
+                </tbody>
+                <tfoot id="preview-table-foot">
+                  <!-- Subtotal, GST, and Grand Total rows -->
+                </tfoot>
+              </table>
+
+              <!-- Amount in Words -->
+              <div id="preview-amount-words-wrap" class="text-[12px] text-slate-600 italic mb-4">
+                <span class="font-bold not-italic text-slate-800">Amount in Words:</span>
+                <span id="preview-amount-words">Rupees Thirty-Four Thousand Only</span>
+              </div>
+
+              <!-- Notes / Warranty Block -->
+              <div id="preview-notes-wrap" class="invoice-notes-block">
+                <div class="invoice-notes-title">Note :</div>
+                <div id="preview-notes-content" class="invoice-notes-content">15 Days Laptop Warranty.
+6 Month charger warranty</div>
+              </div>
+
+              <!-- Query Banner -->
+              <div id="preview-query-banner-wrap" class="query-box-banner">
+                <span id="preview-query-banner">If you have any query, please reach out to us on (+91) 9834265385 or info@syncrotech.in</span>
+              </div>
+
+              <!-- Optional Bank Details & UPI QR Code Section -->
+              <div id="preview-bank-section" class="mt-4 p-3 border border-slate-200 rounded bg-slate-50/70 hidden">
+                <div class="flex items-center justify-between gap-4">
+                  <div class="text-[11.5px] space-y-0.5">
+                    <div class="font-bold text-slate-900 uppercase text-[11px] tracking-wide mb-1">Bank Payment Details:</div>
+                    <div><span class="text-slate-500">Bank:</span> <span id="preview-bank-name" class="font-semibold text-slate-800">HDFC Bank</span></div>
+                    <div><span class="text-slate-500">Account No:</span> <span id="preview-account-number" class="font-mono font-semibold text-slate-800">50200012345678</span></div>
+                    <div><span class="text-slate-500">IFSC Code:</span> <span id="preview-ifsc-code" class="font-mono font-semibold text-slate-800">HDFC0001234</span></div>
+                    <div><span class="text-slate-500">UPI ID:</span> <span id="preview-upi-id" class="font-mono font-semibold text-slate-800">9834265385@upi</span></div>
+                  </div>
+                  <div class="flex flex-col items-center justify-center text-center">
+                    <div id="preview-upi-qr" class="p-1 bg-white border border-slate-200 rounded"></div>
+                    <span class="text-[9px] text-slate-500 font-semibold mt-1">Scan to Pay via UPI</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Paper Bottom Section: Closing & Signature -->
+            <div class="pt-8">
+              <div class="flex justify-between items-end">
+                
+                <!-- Left: Thank You message -->
+                <div class="w-1/2">
+                  <div id="preview-thank-you" class="font-bold text-[13px] text-slate-900 tracking-wide uppercase">
+                    THANK YOU FOR YOUR BUSINESS...!
+                  </div>
+                </div>
+
+                <!-- Right: Signatory -->
+                <div class="w-1/2 text-right">
+                  <!-- Optional Signature Stamp Image -->
+                  <div id="preview-signature-img-wrap" class="mb-1 hidden inline-block">
+                    <img id="preview-signature-img" src="" alt="Signature" class="max-h-12 max-w-[140px] object-contain ml-auto">
+                  </div>
+                  <div class="text-[12px] text-slate-500 mb-6" id="preview-for-company">For SYNCROTECH TECHNOLOGIES LLP</div>
+                  <div id="preview-signatory-name" class="font-bold text-[13.5px] text-slate-900">Syncrotech Technologies LLP</div>
+                  <div class="text-[11px] text-slate-500">Authorized Signatory</div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Mobile Floating Sticky Action Bar -->
+  <aside class="mobile-action-bar no-print justify-between items-center gap-2">
+    <button id="mobile-btn-doc" type="button" class="flex-1 py-2 text-xs font-bold rounded-lg text-sky-800 bg-sky-100 flex items-center justify-center gap-1">
+      <span>📝</span> Word DOC
+    </button>
+    <button id="mobile-btn-pdf" type="button" class="flex-1 py-2 text-xs font-bold rounded-lg text-white bg-sky-600 shadow flex items-center justify-center gap-1">
+      <span>📄</span> PDF
+    </button>
+    <button id="mobile-btn-share" type="button" class="flex-1 py-2 text-xs font-bold rounded-lg text-emerald-800 bg-emerald-100 flex items-center justify-center gap-1">
+      <span>📲</span> Share
+    </button>
+  </aside>
+
+  <!-- History / Drafts Modal -->
+  <div id="modal-history" class="no-print fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200">
+      <div class="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">📁</span>
+          <h3 class="font-bold text-slate-800">Saved Invoices & Drafts</h3>
+        </div>
+        <button id="btn-close-history" class="text-slate-400 hover:text-slate-600 text-lg font-bold p-1">✕</button>
+      </div>
+
+      <div class="p-4 sm:p-5 max-h-80 overflow-y-auto space-y-2" id="history-list-container">
+        <!-- Injected dynamically -->
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3 text-xs">
+        <button id="btn-save-current" class="px-3 py-2 rounded-lg font-semibold bg-sky-600 text-white hover:bg-sky-700">
+          💾 Save Current as Draft
+        </button>
+        <div class="flex gap-2">
+          <button id="btn-export-backup" class="px-3 py-2 rounded-lg font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">
+            Export JSON
+          </button>
+          <label class="px-3 py-2 rounded-lg font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 cursor-pointer">
+            Import JSON
+            <input type="file" id="input-import-backup" accept=".json" class="hidden">
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container no-print"></div>
+
+  <!-- App Core JavaScript (ES Module) -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

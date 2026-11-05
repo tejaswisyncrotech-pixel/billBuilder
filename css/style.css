@@ -1,0 +1,373 @@
+/* ==========================================================================
+   Universal Invoice Builder Stylesheet
+   - Desktop dual-pane & Mobile tabbed responsiveness
+   - Pixel-perfect A4 simulation matching sample invoice
+   - Print-optimized rules for PDF and Direct Print
+   ========================================================================== */
+
+:root {
+  --primary-color: #0284c7;
+  --primary-hover: #0369a1;
+  --paper-bg: #ffffff;
+  --paper-border: #e2e8f0;
+  --table-border: #334155;
+  --banner-bg: #e0f2fe;
+  --banner-border: #bae6fd;
+  --banner-text: #0369a1;
+}
+
+/* Base resets & typography */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f1f5f9;
+  color: #1e293b;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* --------------------------------------------------------------------------
+   A4 Paper Simulation
+   -------------------------------------------------------------------------- */
+.invoice-paper-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2rem;
+}
+
+.invoice-paper {
+  background: #ffffff;
+  width: 210mm;
+  min-height: 297mm;
+  padding: 18mm 16mm 20mm 16mm;
+  margin: 0 auto;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  position: relative;
+  box-sizing: border-box;
+  color: #0f172a;
+  font-size: 13.5px;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Classic Template Specific Styling (Matching Sample Invoice) */
+.template-classic .invoice-header-title {
+  font-size: 26px;
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 22px;
+  letter-spacing: -0.5px;
+}
+
+.template-classic .company-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #000000;
+  margin-bottom: 3px;
+  text-transform: uppercase;
+}
+
+.template-classic .bill-to-title {
+  font-weight: 700;
+  font-size: 14.5px;
+  margin-bottom: 4px;
+}
+
+.template-classic .bill-to-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* Classic Items Table */
+.classic-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 14px;
+  margin-bottom: 14px;
+}
+
+.classic-table th,
+.classic-table td {
+  border: 1px solid #1e293b;
+  padding: 8px 10px;
+}
+
+.classic-table th {
+  background-color: #dbeafe; /* Light soft blue like the sample */
+  font-weight: 700;
+  font-size: 12.5px;
+  text-transform: uppercase;
+  color: #0f172a;
+  letter-spacing: 0.3px;
+}
+
+.classic-table td.empty-row-cell {
+  height: 26px;
+  padding: 0;
+}
+
+/* Query Banner Box */
+.query-box-banner {
+  background-color: #dbeafe;
+  border: 1px solid #bfdbfe;
+  color: #0369a1;
+  padding: 7px 12px;
+  font-weight: 600;
+  font-size: 12px;
+  margin-top: 16px;
+  margin-bottom: 20px;
+  border-radius: 2px;
+}
+
+/* Notes section */
+.invoice-notes-block {
+  margin-top: 10px;
+  font-size: 12.5px;
+}
+
+.invoice-notes-title {
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+
+.invoice-notes-content {
+  margin-left: 20px;
+  white-space: pre-line;
+  line-height: 1.5;
+}
+
+/* Modern Template Variations */
+.template-modern .invoice-paper {
+  border-top: 6px solid #0284c7;
+}
+
+.template-modern .classic-table th {
+  background-color: #f8fafc;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.template-modern .classic-table td {
+  border-color: #e2e8f0;
+}
+
+/* Minimal Template Variations */
+.template-minimal .classic-table th,
+.template-minimal .classic-table td {
+  border-left: none;
+  border-right: none;
+  border-color: #e2e8f0;
+}
+.template-minimal .classic-table th {
+  background: transparent;
+  border-top: 1.5px solid #0f172a;
+  border-bottom: 1.5px solid #0f172a;
+}
+
+/* Responsive Zoom Container for Mobile/Tablet */
+@media screen and (max-width: 1024px) {
+  .invoice-paper-wrapper {
+    padding: 10px;
+  }
+  
+  .invoice-paper {
+    width: 100%;
+    max-width: 210mm;
+    min-height: auto;
+    padding: 15px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  }
+  
+  .classic-table th,
+  .classic-table td {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   UI Form Controls & Tabs
+   -------------------------------------------------------------------------- */
+.form-section-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02);
+}
+
+.form-label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 0.35rem;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.875rem;
+  color: #0f172a;
+  background-color: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+/* Floating Action Bar on Mobile */
+.mobile-action-bar {
+  display: none;
+}
+
+@media screen and (max-width: 768px) {
+  .mobile-action-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border-top: 1px solid #e2e8f0;
+    padding: 0.75rem 1rem;
+    z-index: 50;
+    box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
+  }
+  
+  .main-content-container {
+    padding-bottom: 5rem;
+  }
+}
+
+/* Toast Notifications */
+.toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  background: #0f172a;
+  color: #ffffff;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Print Stylesheet (@media print)
+   - Zero margins, pure white background, hides all editor & navigation elements
+   -------------------------------------------------------------------------- */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm 10mm 12mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Hide web interface, toolbars, editor panels, toasts */
+  .no-print,
+  #app-header,
+  #editor-pane,
+  #mobile-tabs,
+  .mobile-action-bar,
+  .toast-container,
+  button,
+  input,
+  select {
+    display: none !important;
+  }
+
+  /* Force preview pane to full width */
+  #preview-pane,
+  .invoice-paper-wrapper {
+    display: block !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  .invoice-paper {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Force background colors to print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
