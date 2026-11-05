@@ -1,12 +1,13 @@
 /**
  * Invoice Builder Core Application Logic
  * Reactive state management, live DOM two-way binding, auto-calculations,
- * GST engine, UPI QR generation, local storage persistence, and export integration.
+ * GST engine, UPI QR generation, local storage persistence, responsive scaling,
+ * and robust PDF export & sharing integration.
  */
 
 import { defaultInvoiceData } from "./sample-data.js";
 import { amountToWords } from "./words.js";
-import { downloadPDF, downloadDOC, shareInvoice, printInvoice } from "./export.js";
+import { downloadPDF, downloadDOC, sharePdfInvoice, shareViaWhatsApp, printInvoice } from "./export.js";
 
 // Global Application State
 let state = JSON.parse(JSON.stringify(defaultInvoiceData));
@@ -17,6 +18,8 @@ document.addEventListener("DOMContentLoaded", () => {
   loadSavedState();
   initFormInputs();
   initEventListeners();
+  initZoomControls();
+  initShareModal();
   renderItemsEditor();
   calculateAndRender();
 });
@@ -89,7 +92,7 @@ function initFormInputs() {
   const selectGstRate = document.getElementById("select-gst-rate");
   if (selectGstRate) {
     const rate = String(state.tax.rate);
-    const hasOption = Array.from(selectGstRate.options).some(o => o.value === rate);
+    const hasOption = Array.from(selectGstRate.options).some((o) => o.value === rate);
     if (hasOption) {
       selectGstRate.value = rate;
       toggleCustomGstWrap(false);
@@ -153,7 +156,11 @@ function initEventListeners() {
       previewPane.classList.remove("hidden");
       tabPreview.className = "py-2 text-xs font-bold rounded-lg transition-all text-sky-700 bg-white shadow-sm flex items-center justify-center gap-1.5";
       tabEditor.className = "py-2 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5";
-      // Trigger QR re-render if visible
+      
+      // Auto-fit on mobile screens when switching to preview
+      if (window.innerWidth < 768) {
+        applyZoom("fit");
+      }
       calculateAndRender();
     });
   }
@@ -255,7 +262,7 @@ function initEventListeners() {
     });
   }
 
-  // Tax Controls
+  // Tax & GST Controls
   const toggleGst = document.getElementById("toggle-gst");
   if (toggleGst) {
     toggleGst.addEventListener("change", (e) => {
@@ -367,7 +374,7 @@ function initEventListeners() {
   const previewElement = document.getElementById("invoice-preview");
 
   const handlePdfDownload = async () => {
-    showToast("Generating PDF...", "⏳");
+    showToast("Generating crisp A4 PDF...", "⏳");
     const success = await downloadPDF(previewElement, state.invoiceNumber);
     if (success) showToast("PDF downloaded successfully!");
   };
@@ -378,9 +385,13 @@ function initEventListeners() {
     showToast("Word DOC file exported!");
   };
 
-  const handleShare = () => {
+  const handleShare = async () => {
     const calc = getCalculations();
-    shareInvoice(state, calc, previewElement);
+    showToast("Preparing PDF to share...", "⏳");
+    const result = await sharePdfInvoice(previewElement, state, calc);
+    if (result.success && result.method === "native_file") {
+      showToast("Sharing PDF...");
+    }
   };
 
   // Bind desktop & mobile export triggers
@@ -397,6 +408,111 @@ function initEventListeners() {
 
   // History Modal Listeners
   initHistoryModal();
+}
+
+/**
+ * Initialize Responsive Zoom & Fit Controls
+ */
+function initZoomControls() {
+  const btnZoomFit = document.getElementById("btn-zoom-fit");
+  const btnZoom100 = document.getElementById("btn-zoom-100");
+
+  if (btnZoomFit) btnZoomFit.addEventListener("click", () => applyZoom("fit"));
+  if (btnZoom100) btnZoom100.addEventListener("click", () => applyZoom("100"));
+
+  // Auto-adapt on window resize
+  window.addEventListener("resize", () => {
+    if (window.innerWidth < 768) {
+      applyZoom("fit");
+    }
+  });
+
+  if (window.innerWidth < 768) {
+    applyZoom("fit");
+  }
+}
+
+function applyZoom(mode) {
+  const preview = document.getElementById("invoice-preview");
+  const wrapper = document.getElementById("paper-wrapper");
+  const btnZoomFit = document.getElementById("btn-zoom-fit");
+  const btnZoom100 = document.getElementById("btn-zoom-100");
+
+  if (!preview || !wrapper) return;
+
+  if (mode === "fit") {
+    const availableWidth = wrapper.clientWidth - 20;
+    const a4WidthPx = 794; // 210mm in standard 96dpi pixels
+    if (availableWidth < a4WidthPx) {
+      const scale = Math.max(0.38, Math.min(1, availableWidth / a4WidthPx));
+      preview.style.transform = `scale(${scale})`;
+      preview.style.marginBottom = `-${(1 - scale) * (preview.offsetHeight || 1120)}px`;
+    } else {
+      preview.style.transform = "none";
+      preview.style.marginBottom = "0";
+    }
+
+    if (btnZoomFit) btnZoomFit.className = "px-2 py-0.5 rounded hover:bg-slate-100 transition-colors bg-slate-100 text-sky-700 font-bold";
+    if (btnZoom100) btnZoom100.className = "px-2 py-0.5 rounded hover:bg-slate-100 transition-colors text-slate-600";
+  } else {
+    preview.style.transform = "none";
+    preview.style.marginBottom = "0";
+
+    if (btnZoom100) btnZoom100.className = "px-2 py-0.5 rounded hover:bg-slate-100 transition-colors bg-slate-100 text-sky-700 font-bold";
+    if (btnZoomFit) btnZoomFit.className = "px-2 py-0.5 rounded hover:bg-slate-100 transition-colors text-slate-600";
+  }
+}
+
+/**
+ * Initialize Share Modal Listeners
+ */
+function initShareModal() {
+  const modal = document.getElementById("modal-share");
+  const btnClose = document.getElementById("btn-close-share");
+  const btnWhatsApp = document.getElementById("btn-share-whatsapp");
+  const btnDownloadAgain = document.getElementById("btn-share-download-pdf");
+  const btnCopy = document.getElementById("btn-copy-summary");
+
+  if (!modal) return;
+
+  if (btnClose) {
+    btnClose.addEventListener("click", () => {
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    });
+  }
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) {
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+  });
+
+  if (btnWhatsApp) {
+    btnWhatsApp.addEventListener("click", () => {
+      shareViaWhatsApp(state, getCalculations());
+    });
+  }
+
+  if (btnDownloadAgain) {
+    btnDownloadAgain.addEventListener("click", () => {
+      const preview = document.getElementById("invoice-preview");
+      downloadPDF(preview, state.invoiceNumber);
+    });
+  }
+
+  if (btnCopy) {
+    btnCopy.addEventListener("click", () => {
+      const summaryEl = document.getElementById("share-modal-summary");
+      if (summaryEl) {
+        summaryEl.select();
+        navigator.clipboard.writeText(summaryEl.value).then(() => {
+          showToast("Summary copied to clipboard!");
+        });
+      }
+    });
+  }
 }
 
 /**
@@ -418,7 +534,7 @@ function renderItemsEditor() {
           <button type="button" class="btn-dup-item p-1 text-slate-500 hover:text-sky-600 rounded hover:bg-slate-200" title="Duplicate item" data-index="${index}">
             📋
           </button>
-          <button type="button" class="btn-del-item p-1 text-slate-500 hover:text-rose-600 rounded hover:bg-slate-200 ${state.items.length === 1 ? 'opacity-30 cursor-not-allowed' : ''}" title="Delete item" data-index="${index}">
+          <button type="button" class="btn-del-item p-1 text-slate-500 hover:text-rose-600 rounded hover:bg-slate-200 ${state.items.length === 1 ? "opacity-30 cursor-not-allowed" : ""}" title="Delete item" data-index="${index}">
             🗑️
           </button>
         </div>
@@ -432,11 +548,11 @@ function renderItemsEditor() {
       <div class="grid grid-cols-3 gap-2">
         <div>
           <label class="form-label text-[11px]">Rate / Price (${state.currency})</label>
-          <input type="number" class="item-rate form-input text-xs" min="0" step="any" placeholder="0" value="${item.rate}">
+          <input type="number" inputmode="decimal" class="item-rate form-input text-xs" min="0" step="any" placeholder="0" value="${item.rate}">
         </div>
         <div>
           <label class="form-label text-[11px]">Quantity</label>
-          <input type="number" class="item-qty form-input text-xs text-center" min="0" step="any" placeholder="1" value="${item.quantity}">
+          <input type="number" inputmode="decimal" class="item-qty form-input text-xs text-center" min="0" step="any" placeholder="1" value="${item.quantity}">
         </div>
         <div>
           <label class="form-label text-[11px]">Total (${state.currency})</label>
@@ -745,7 +861,10 @@ function renderPreviewTableBody(curr) {
   state.items.forEach((item) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td class="text-left font-medium text-slate-800">${escapeHtml(item.description || "Item")}</td>
+      <td class="text-left font-medium text-slate-800">
+        <div>${escapeHtml(item.description || "Item")}</div>
+        ${item.hsn ? `<div class="text-[10px] text-slate-500 font-mono">HSN: ${escapeHtml(item.hsn)}</div>` : ""}
+      </td>
       <td class="text-right whitespace-nowrap text-slate-800">${curr} ${formatNumber(item.rate)}</td>
       <td class="text-center font-medium text-slate-800">${item.quantity}</td>
       <td class="text-right whitespace-nowrap font-semibold text-slate-900">${curr} ${formatNumber(item.rate * item.quantity)}</td>
@@ -775,19 +894,21 @@ function renderPreviewTableFoot(calc, curr) {
   if (!tfoot) return;
 
   let footHtml = "";
+  const isTaxOrDiscountActive = state.tax.enabled || calc.discountAmount > 0;
+  const subtotalLabel = isTaxOrDiscountActive ? "Subtotal (Taxable Value)" : "Total";
 
-  // Base Total / Subtotal row (always shown, matching sample)
+  // Base Total / Subtotal row
   footHtml += `
     <tr>
-      <td colspan="3" class="text-left font-bold text-slate-900 text-[14px]">Total</td>
-      <td class="text-right font-bold text-slate-900 text-[14px] whitespace-nowrap">${curr} ${formatNumber(calc.subtotal)}</td>
+      <td colspan="3" class="text-left font-bold text-slate-900 text-[13.5px]">${subtotalLabel}</td>
+      <td class="text-right font-bold text-slate-900 text-[13.5px] whitespace-nowrap">${curr} ${formatNumber(calc.subtotal)}</td>
     </tr>
   `;
 
   // Discount row (if any)
   if (calc.discountAmount > 0) {
     footHtml += `
-      <tr class="text-slate-700 text-[12.5px]">
+      <tr class="text-slate-700 text-[12px]">
         <td colspan="3" class="text-right font-semibold">Discount:</td>
         <td class="text-right font-semibold whitespace-nowrap">- ${curr} ${formatNumber(calc.discountAmount)}</td>
       </tr>
@@ -799,18 +920,18 @@ function renderPreviewTableFoot(calc, curr) {
     if (state.tax.mode === "intra") {
       const halfRate = (calc.gstRate / 2).toFixed(1);
       footHtml += `
-        <tr class="text-slate-700 text-[12.5px]">
+        <tr class="text-slate-700 text-[12px]">
           <td colspan="3" class="text-right font-semibold">CGST (${halfRate}%):</td>
           <td class="text-right font-semibold whitespace-nowrap">${curr} ${formatNumber(calc.cgst)}</td>
         </tr>
-        <tr class="text-slate-700 text-[12.5px]">
+        <tr class="text-slate-700 text-[12px]">
           <td colspan="3" class="text-right font-semibold">SGST (${halfRate}%):</td>
           <td class="text-right font-semibold whitespace-nowrap">${curr} ${formatNumber(calc.sgst)}</td>
         </tr>
       `;
     } else {
       footHtml += `
-        <tr class="text-slate-700 text-[12.5px]">
+        <tr class="text-slate-700 text-[12px]">
           <td colspan="3" class="text-right font-semibold">IGST (${calc.gstRate}%):</td>
           <td class="text-right font-semibold whitespace-nowrap">${curr} ${formatNumber(calc.igst)}</td>
         </tr>
@@ -821,7 +942,7 @@ function renderPreviewTableFoot(calc, curr) {
   // Round Off row
   if (calc.roundOffDiff !== 0) {
     footHtml += `
-      <tr class="text-slate-700 text-[12px]">
+      <tr class="text-slate-700 text-[11.5px]">
         <td colspan="3" class="text-right font-semibold">Round Off:</td>
         <td class="text-right font-semibold whitespace-nowrap">${calc.roundOffDiff > 0 ? "+" : ""}${curr} ${formatNumber(calc.roundOffDiff)}</td>
       </tr>
@@ -829,11 +950,11 @@ function renderPreviewTableFoot(calc, curr) {
   }
 
   // Grand Total row (if taxes or discounts are active)
-  if (state.tax.enabled || calc.discountAmount > 0) {
+  if (isTaxOrDiscountActive) {
     footHtml += `
       <tr class="bg-slate-50">
-        <td colspan="3" class="text-left font-bold text-slate-900 text-[15px]">Grand Total</td>
-        <td class="text-right font-bold text-slate-900 text-[15px] whitespace-nowrap">${curr} ${formatNumber(calc.grandTotal)}</td>
+        <td colspan="3" class="text-left font-bold text-slate-900 text-[14.5px]">Grand Total</td>
+        <td class="text-right font-bold text-slate-900 text-[14.5px] whitespace-nowrap">${curr} ${formatNumber(calc.grandTotal)}</td>
       </tr>
     `;
   }
@@ -987,7 +1108,7 @@ function initHistoryModal() {
       itemToSave.savedAt = new Date().toISOString();
 
       history.unshift(itemToSave);
-      setHistory(history.slice(0, 50)); // Keep up to 50 saved invoices
+      setHistory(history.slice(0, 50));
       renderHistoryList();
       showToast("Invoice saved to history!");
     });
@@ -1006,7 +1127,7 @@ function initHistoryModal() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Invoice_Builder_Backup_${new Date().toISOString().slice(0,10)}.json`;
+      a.download = `Invoice_Builder_Backup_${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
     });
@@ -1139,4 +1260,3 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
-

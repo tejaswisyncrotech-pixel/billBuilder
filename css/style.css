@@ -1,7 +1,8 @@
 /* ==========================================================================
    Universal Invoice Builder Stylesheet
-   - Desktop dual-pane & Mobile tabbed responsiveness
-   - Pixel-perfect A4 simulation matching sample invoice
+   - Desktop dual-pane & Mobile/Tablet tabbed responsiveness
+   - Scale-to-fit preview engine for small screens
+   - Crisp A4 styling matching sample invoice
    - Print-optimized rules for PDF and Direct Print
    ========================================================================== */
 
@@ -10,9 +11,9 @@
   --primary-hover: #0369a1;
   --paper-bg: #ffffff;
   --paper-border: #e2e8f0;
-  --table-border: #334155;
-  --banner-bg: #e0f2fe;
-  --banner-border: #bae6fd;
+  --table-border: #1e293b;
+  --banner-bg: #dbeafe;
+  --banner-border: #bfdbfe;
   --banner-text: #0369a1;
 }
 
@@ -25,7 +26,7 @@ body {
   margin: 0;
   padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background-color: #f1f5f9;
+  background-color: #f8fafc;
   color: #1e293b;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
@@ -48,7 +49,7 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   A4 Paper Simulation
+   A4 Paper Simulation & Responsive Viewport Engine
    -------------------------------------------------------------------------- */
 .invoice-paper-wrapper {
   display: flex;
@@ -56,24 +57,28 @@ body {
   align-items: flex-start;
   width: 100%;
   overflow-x: auto;
-  padding-bottom: 2rem;
+  padding: 0.5rem 0 2rem 0;
+  -webkit-overflow-scrolling: touch;
 }
 
+/* A4 Paper Dimensions (210mm x 297mm) */
 .invoice-paper {
   background: #ffffff;
   width: 210mm;
   min-height: 297mm;
   padding: 18mm 16mm 20mm 16mm;
   margin: 0 auto;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.06);
   position: relative;
   box-sizing: border-box;
   color: #0f172a;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.45;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  transform-origin: top center;
+  transition: transform 0.2s ease;
 }
 
 /* Classic Template Specific Styling (Matching Sample Invoice) */
@@ -81,8 +86,9 @@ body {
   font-size: 26px;
   font-weight: 500;
   text-align: center;
-  margin-bottom: 22px;
+  margin-bottom: 20px;
   letter-spacing: -0.5px;
+  color: #000000;
 }
 
 .template-classic .company-name {
@@ -91,17 +97,20 @@ body {
   color: #000000;
   margin-bottom: 3px;
   text-transform: uppercase;
+  letter-spacing: -0.2px;
 }
 
 .template-classic .bill-to-title {
   font-weight: 700;
-  font-size: 14.5px;
-  margin-bottom: 4px;
+  font-size: 14px;
+  margin-bottom: 3px;
+  color: #000000;
 }
 
 .template-classic .bill-to-name {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13.5px;
+  color: #000000;
 }
 
 /* Classic Items Table */
@@ -119,16 +128,16 @@ body {
 }
 
 .classic-table th {
-  background-color: #dbeafe; /* Light soft blue like the sample */
+  background-color: #dbeafe; /* Light cyan/blue header matching sample */
   font-weight: 700;
-  font-size: 12.5px;
+  font-size: 12px;
   text-transform: uppercase;
   color: #0f172a;
   letter-spacing: 0.3px;
 }
 
 .classic-table td.empty-row-cell {
-  height: 26px;
+  height: 28px;
   padding: 0;
 }
 
@@ -137,12 +146,13 @@ body {
   background-color: #dbeafe;
   border: 1px solid #bfdbfe;
   color: #0369a1;
-  padding: 7px 12px;
+  padding: 8px 14px;
   font-weight: 600;
   font-size: 12px;
   margin-top: 16px;
   margin-bottom: 20px;
   border-radius: 2px;
+  line-height: 1.4;
 }
 
 /* Notes section */
@@ -154,12 +164,14 @@ body {
 .invoice-notes-title {
   font-weight: 700;
   margin-bottom: 3px;
+  color: #000000;
 }
 
 .invoice-notes-content {
   margin-left: 20px;
   white-space: pre-line;
   line-height: 1.5;
+  color: #1e293b;
 }
 
 /* Modern Template Variations */
@@ -168,13 +180,13 @@ body {
 }
 
 .template-modern .classic-table th {
-  background-color: #f8fafc;
-  color: #334155;
+  background-color: #f1f5f9;
+  color: #1e293b;
   border-color: #cbd5e1;
 }
 
 .template-modern .classic-table td {
-  border-color: #e2e8f0;
+  border-color: #cbd5e1;
 }
 
 /* Minimal Template Variations */
@@ -190,34 +202,43 @@ body {
   border-bottom: 1.5px solid #0f172a;
 }
 
-/* Responsive Zoom Container for Mobile/Tablet */
+/* --------------------------------------------------------------------------
+   Responsive Mobile & Tablet Viewport Adaptations
+   -------------------------------------------------------------------------- */
 @media screen and (max-width: 1024px) {
   .invoice-paper-wrapper {
-    padding: 10px;
+    padding: 0.5rem;
+  }
+}
+
+/* Scale-to-fit mode on Mobile Screens (< 768px) */
+@media screen and (max-width: 768px) {
+  .mobile-action-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border-top: 1px solid #e2e8f0;
+    padding: 0.65rem 0.75rem;
+    padding-bottom: calc(0.65rem + env(safe-area-inset-bottom, 0px));
+    z-index: 50;
+    box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
   }
   
-  .invoice-paper {
-    width: 100%;
-    max-width: 210mm;
-    min-height: auto;
-    padding: 15px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-  }
-  
-  .classic-table th,
-  .classic-table td {
-    padding: 6px 8px;
-    font-size: 12px;
+  .main-content-container {
+    padding-bottom: 6rem;
   }
 }
 
 /* --------------------------------------------------------------------------
-   UI Form Controls & Tabs
+   UI Form Controls & Cards
    -------------------------------------------------------------------------- */
 .form-section-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
+  border-radius: 0.875rem;
   padding: 1.25rem;
   margin-bottom: 1rem;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02);
@@ -252,40 +273,23 @@ body {
   box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
 }
 
-/* Floating Action Bar on Mobile */
-.mobile-action-bar {
-  display: none;
-}
-
-@media screen and (max-width: 768px) {
-  .mobile-action-bar {
-    display: flex;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: #ffffff;
-    border-top: 1px solid #e2e8f0;
-    padding: 0.75rem 1rem;
-    z-index: 50;
-    box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
-  }
-  
-  .main-content-container {
-    padding-bottom: 5rem;
-  }
-}
-
 /* Toast Notifications */
 .toast-container {
   position: fixed;
-  bottom: 1.5rem;
-  right: 1.5rem;
+  bottom: 5.5rem;
+  right: 1rem;
   z-index: 100;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   pointer-events: none;
+}
+
+@media screen and (min-width: 768px) {
+  .toast-container {
+    bottom: 1.5rem;
+    right: 1.5rem;
+  }
 }
 
 .toast {
@@ -295,6 +299,7 @@ body {
   padding: 0.75rem 1.25rem;
   border-radius: 0.5rem;
   font-size: 0.875rem;
+  font-weight: 500;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
   display: flex;
   align-items: center;
@@ -315,12 +320,12 @@ body {
 
 /* --------------------------------------------------------------------------
    Print Stylesheet (@media print)
-   - Zero margins, pure white background, hides all editor & navigation elements
+   - Pristine A4 page output, hides all web UI, zero margins
    -------------------------------------------------------------------------- */
 @media print {
   @page {
     size: A4 portrait;
-    margin: 10mm 12mm 10mm 12mm;
+    margin: 10mm 14mm 12mm 14mm;
   }
 
   html, body {
@@ -332,20 +337,21 @@ body {
     height: auto !important;
   }
 
-  /* Hide web interface, toolbars, editor panels, toasts */
   .no-print,
   #app-header,
   #editor-pane,
   #mobile-tabs,
   .mobile-action-bar,
   .toast-container,
+  #modal-history,
+  #modal-share,
+  .preview-toolbar,
   button,
   input,
   select {
     display: none !important;
   }
 
-  /* Force preview pane to full width */
   #preview-pane,
   .invoice-paper-wrapper {
     display: block !important;
@@ -363,12 +369,11 @@ body {
     padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
+    transform: none !important;
   }
 
-  /* Force background colors to print */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 }
-

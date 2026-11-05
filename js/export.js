@@ -1,66 +1,206 @@
 /**
- * Export and Sharing utilities:
- * - High-resolution A4 PDF Generation
- * - Microsoft Word (.doc) Generation
- * - Direct Print Engine Trigger
- * - Web Share API & WhatsApp Sharing
+ * Universal Invoice Export & Sharing Suite
+ * - Mobile/Tablet/Desktop robust A4 PDF generation using off-screen clone
+ * - Native PDF File Sharing via Web Share API (share actual PDF to WhatsApp/Email/AirDrop)
+ * - Fallback Share Modal with WhatsApp, Email & Clipboard
+ * - Word (.doc) document export with full table styling
+ * - Direct Print Engine
  */
 
 /**
- * Trigger print dialog with print-specific stylesheet
+ * Creates an exact A4 off-screen clone of the invoice paper.
+ * This guarantees that whether the user is on Mobile, Tablet, or Desktop,
+ * or even on the 'Edit' tab where preview is hidden, the PDF is ALWAYS
+ * rendered in pristine vector A4 dimensions (210mm x 297mm).
  */
-export function printInvoice() {
-  window.print();
+export function createPrintableClone(invoiceElement) {
+  const clone = invoiceElement.cloneNode(true);
+  clone.id = "invoice-clone-for-print";
+  clone.classList.add("template-classic");
+  
+  // Enforce absolute A4 dimensions and reset any responsive transforms
+  clone.style.width = "210mm";
+  clone.style.minHeight = "297mm";
+  clone.style.maxWidth = "none";
+  clone.style.transform = "none";
+  clone.style.margin = "0";
+  clone.style.padding = "18mm 16mm 20mm 16mm";
+  clone.style.background = "#ffffff";
+  clone.style.color = "#0f172a";
+  clone.style.boxShadow = "none";
+  clone.style.border = "none";
+  clone.style.position = "fixed";
+  clone.style.left = "-9999px";
+  clone.style.top = "0";
+  clone.style.zIndex = "-9999";
+  clone.style.display = "flex";
+  clone.style.flexDirection = "column";
+  clone.style.justifyContent = "space-between";
+
+  document.body.appendChild(clone);
+  return clone;
 }
 
 /**
- * Generate and download PDF of the invoice
- * @param {HTMLElement} invoiceElement - The DOM element containing the rendered A4 invoice
- * @param {string} invoiceNumber - Invoice number for filename
+ * Generate PDF Blob from invoice element
+ * @returns {Promise<Blob|null>}
+ */
+export async function generatePdfBlob(invoiceElement, invoiceNumber = "Invoice") {
+  const safeFilename = `Invoice_${String(invoiceNumber).replace(/[\/\\: ]/g, "_")}.pdf`;
+  const clone = createPrintableClone(invoiceElement);
+
+  try {
+    if (typeof window.html2pdf === "function") {
+      const opt = {
+        margin: 0,
+        filename: safeFilename,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          letterRendering: true,
+          windowWidth: 1024,
+          scrollX: 0,
+          scrollY: 0
+        },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
+      };
+
+      const pdfBlob = await window.html2pdf().set(opt).from(clone).outputPdf("blob");
+      return pdfBlob;
+    } else {
+      return null;
+    }
+  } catch (err) {
+    console.error("PDF generation failed:", err);
+    return null;
+  } finally {
+    if (clone && clone.parentNode) {
+      clone.parentNode.removeChild(clone);
+    }
+  }
+}
+
+/**
+ * Download PDF file to user's device
  */
 export async function downloadPDF(invoiceElement, invoiceNumber = "Invoice") {
   const safeFilename = `Invoice_${String(invoiceNumber).replace(/[\/\\: ]/g, "_")}.pdf`;
 
-  // Check if html2pdf is available
-  if (typeof window.html2pdf === "function") {
-    const opt = {
-      margin: 0,
-      filename: safeFilename,
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        letterRendering: true,
-        windowWidth: 1024
-      },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
-    };
-
-    try {
-      await window.html2pdf().set(opt).from(invoiceElement).save();
-      return true;
-    } catch (err) {
-      console.warn("html2pdf failed, falling back to window.print():", err);
-      window.print();
-      return false;
-    }
+  const blob = await generatePdfBlob(invoiceElement, invoiceNumber);
+  if (blob) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = safeFilename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return true;
   } else {
-    // Fallback if CDN is offline or blocked
+    // Fallback to browser print engine if html2pdf is unavailable
     window.print();
     return false;
   }
 }
 
 /**
- * Generate and download Microsoft Word / Google Docs compatible (.doc) file
- * @param {Object} data - The invoice data state
- * @param {Object} calc - The calculated totals
+ * Share PDF directly via Web Share API (attaches actual .pdf file on mobile)
+ * or opens the Share Modal if file sharing is not supported by browser.
+ */
+export async function sharePdfInvoice(invoiceElement, data, calc, onStatusChange) {
+  const filename = `Invoice_${String(data.invoiceNumber || "Invoice").replace(/[\/\\: ]/g, "_")}.pdf`;
+  const shareText = formatShareSummary(data, calc);
+
+  if (onStatusChange) onStatusChange("Generating PDF for sharing...", true);
+
+  // 1. Generate the actual PDF Blob
+  const blob = await generatePdfBlob(invoiceElement, data.invoiceNumber);
+
+  if (onStatusChange) onStatusChange("", false);
+
+  if (blob) {
+    // Create actual PDF file object
+    const pdfFile = new File([blob], filename, { type: "application/pdf" });
+
+    // 2. Check if browser can share files directly (iOS Safari, Android Chrome, etc.)
+    if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+      try {
+        await navigator.share({
+          title: `${data.invoiceTitle || "Invoice"} #${data.invoiceNumber}`,
+          text: shareText,
+          files: [pdfFile]
+        });
+        return { success: true, method: "native_file" };
+      } catch (err) {
+        if (err.name === "AbortError") {
+          return { success: false, method: "cancelled" };
+        }
+        console.warn("Native file share failed, falling back to Share Modal:", err);
+      }
+    }
+
+    // 3. If file share wasn't supported, trigger auto-download of the PDF
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+    // 4. Open the friendly Share Modal with WhatsApp, Email & Copy options
+    openShareModal(data, calc, filename, true);
+    return { success: true, method: "modal_with_download" };
+  } else {
+    // Fallback if PDF generation fails
+    openShareModal(data, calc, filename, false);
+    return { success: false, method: "modal_fallback" };
+  }
+}
+
+/**
+ * Open the user-friendly Share Modal
+ */
+export function openShareModal(data, calc, filename, pdfDownloaded = false) {
+  const modal = document.getElementById("modal-share");
+  if (!modal) {
+    // Fallback directly to WhatsApp if modal doesn't exist
+    shareViaWhatsApp(data, calc);
+    return;
+  }
+
+  const titleEl = document.getElementById("share-modal-title");
+  const noteEl = document.getElementById("share-modal-note");
+  const summaryEl = document.getElementById("share-modal-summary");
+
+  if (titleEl) titleEl.textContent = `Share Invoice #${data.invoiceNumber || ""}`;
+  if (noteEl) {
+    if (pdfDownloaded) {
+      noteEl.innerHTML = `✅ <strong>${filename}</strong> has been saved to your device. You can now attach it or send the summary below!`;
+      noteEl.classList.remove("hidden");
+    } else {
+      noteEl.classList.add("hidden");
+    }
+  }
+
+  if (summaryEl) {
+    summaryEl.value = formatShareSummary(data, calc);
+  }
+
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+}
+
+/**
+ * Generate Microsoft Word / Google Docs compatible (.doc) file
  */
 export function downloadDOC(data, calc) {
   const filename = `Invoice_${String(data.invoiceNumber || "Invoice").replace(/[\/\\: ]/g, "_")}.doc`;
 
-  // Build clean Word-compatible HTML table representation
   const itemsRows = data.items
     .map(
       (item) => `
@@ -93,7 +233,7 @@ export function downloadDOC(data, calc) {
   let taxRows = "";
   if (data.tax.enabled && calc.taxAmount > 0) {
     if (data.tax.mode === "intra") {
-      const halfRate = (data.tax.rate / 2).toFixed(1);
+      const halfRate = (calc.gstRate / 2).toFixed(1);
       taxRows = `
         <tr>
           <td colspan="3" style="border: 1px solid #333; padding: 6px 10px; text-align: right; font-size: 10pt;">CGST (${halfRate}%):</td>
@@ -107,7 +247,7 @@ export function downloadDOC(data, calc) {
     } else {
       taxRows = `
         <tr>
-          <td colspan="3" style="border: 1px solid #333; padding: 6px 10px; text-align: right; font-size: 10pt;">IGST (${data.tax.rate}%):</td>
+          <td colspan="3" style="border: 1px solid #333; padding: 6px 10px; text-align: right; font-size: 10pt;">IGST (${calc.gstRate}%):</td>
           <td style="border: 1px solid #333; padding: 6px 10px; text-align: right; font-size: 10pt;">${data.currency} ${formatNumber(calc.igst)}</td>
         </tr>
       `;
@@ -144,7 +284,6 @@ export function downloadDOC(data, calc) {
         }
         h1 { font-size: 24pt; margin: 0 0 10pt 0; text-align: center; font-weight: normal; }
         table { border-collapse: collapse; width: 100%; margin-top: 12pt; }
-        .meta-table td { border: none; padding: 2px 4px; font-size: 10pt; }
         .query-box {
           background-color: #d8edf8;
           border: 1px solid #bce8f1;
@@ -280,54 +419,45 @@ export function downloadDOC(data, calc) {
 }
 
 /**
- * Native Web Share or WhatsApp Share
- */
-export async function shareInvoice(data, calc, invoiceElement) {
-  const message = `📄 *${data.invoiceTitle || "INVOICE"}: ${data.invoiceNumber}*
-📅 *Date:* ${formatDisplayDate(data.invoiceDate)}
-🏢 *From:* ${data.company.name}
-👤 *To:* ${data.client.name}
-💰 *Total Amount:* ${data.currency} ${formatNumber(calc.grandTotal)}
-
-${data.thankYouMessage || "Thank you for your business!"}`;
-
-  // Try Native Share API
-  if (navigator.share) {
-    try {
-      await navigator.share({
-        title: `${data.invoiceTitle || "Invoice"} ${data.invoiceNumber}`,
-        text: message
-      });
-      return;
-    } catch (err) {
-      if (err.name !== "AbortError") {
-        console.log("Web share was cancelled or failed:", err);
-      }
-    }
-  }
-
-  // Fallback to WhatsApp
-  shareViaWhatsApp(data, calc);
-}
-
-/**
- * Share direct to WhatsApp via web link
+ * Share directly to WhatsApp with pre-filled invoice message
  */
 export function shareViaWhatsApp(data, calc) {
-  const text = `📄 *${data.invoiceTitle || "INVOICE"}: ${data.invoiceNumber}*
-📅 *Date:* ${formatDisplayDate(data.invoiceDate)}
-🏢 *From:* ${data.company.name}
-👤 *To:* ${data.client.name}
-💰 *Total Amount:* ${data.currency} ${formatNumber(calc.grandTotal)}
-
-${data.thankYouMessage || "Thank you for your business!"}`;
-
+  const text = formatShareSummary(data, calc);
   const phone = (data.client.phone || "").replace(/[^0-9]/g, "");
   const url = phone
     ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
     : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
 
   window.open(url, "_blank");
+}
+
+/**
+ * Format invoice summary for text sharing
+ */
+export function formatShareSummary(data, calc) {
+  let taxDetails = "";
+  if (data.tax.enabled && calc.taxAmount > 0) {
+    if (data.tax.mode === "intra") {
+      taxDetails = `\nCGST: ${data.currency} ${formatNumber(calc.cgst)}\nSGST: ${data.currency} ${formatNumber(calc.sgst)}`;
+    } else {
+      taxDetails = `\nIGST (${calc.gstRate}%): ${data.currency} ${formatNumber(calc.igst)}`;
+    }
+  }
+
+  return `📄 *${data.invoiceTitle || "INVOICE"} #${data.invoiceNumber}*
+📅 *Date:* ${formatDisplayDate(data.invoiceDate)}
+🏢 *From:* ${data.company.name}
+👤 *Billed To:* ${data.client.name}
+━━━━━━━━━━━━━━━━━━
+💰 *Subtotal:* ${data.currency} ${formatNumber(calc.subtotal)}${taxDetails}
+🏷️ *Grand Total:* ${data.currency} ${formatNumber(calc.grandTotal)}
+📝 *In Words:* ${calc.amountInWords || ""}
+━━━━━━━━━━━━━━━━━━
+${data.queryBanner ? `${data.queryBanner}\n` : ""}${data.thankYouMessage || "THANK YOU FOR YOUR BUSINESS...!"}`;
+}
+
+export function printInvoice() {
+  window.print();
 }
 
 // Utility Helpers
@@ -359,4 +489,3 @@ function formatDisplayDate(dateStr) {
   const year = d.getFullYear();
   return `${day}-${month}-${year}`;
 }
-
