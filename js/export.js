@@ -1,6 +1,7 @@
 /**
  * Universal Invoice Export & Sharing Suite
- * - Reliable A4 PDF generation (fixes blank canvas & scaling issues)
+ * - Reliable A4 PDF generation (fixes blank canvas, alignment & cropping issues)
+ * - Perfectly centered PDF on A4 paper with balanced margins
  * - Direct PDF File Sharing via Web Share API
  * - Interactive Share Modal with WhatsApp, Email & Clipboard
  * - Word (.doc) document export with full table styling
@@ -9,8 +10,8 @@
 
 /**
  * Creates an exact A4 staging container placed at (0,0) in the viewport.
- * html2canvas REQUIRES the element to be in-viewport (x >= 0, y >= 0) and not display:none.
- * We position it at (0,0) with high z-index, capture it in ~200ms, and immediately remove it.
+ * html2canvas captures this clean clone with symmetric left and right padding,
+ * ensuring no content is clipped and all elements are centered on the page.
  */
 function createStagingContainer(invoiceElement) {
   const wrapper = document.createElement("div");
@@ -18,8 +19,7 @@ function createStagingContainer(invoiceElement) {
   wrapper.style.position = "fixed";
   wrapper.style.left = "0";
   wrapper.style.top = "0";
-  wrapper.style.width = "794px"; // 210mm at 96 DPI
-  wrapper.style.minHeight = "1123px"; // 297mm at 96 DPI
+  wrapper.style.width = "760px";
   wrapper.style.backgroundColor = "#ffffff";
   wrapper.style.zIndex = "999999";
   wrapper.style.overflow = "visible";
@@ -36,9 +36,10 @@ function createStagingContainer(invoiceElement) {
   clone.style.transform = "none";
   clone.style.margin = "0";
   clone.style.marginBottom = "0";
-  clone.style.width = "794px";
-  clone.style.minHeight = "1123px";
-  clone.style.padding = "45px 42px 48px 42px";
+  clone.style.width = "760px";
+  clone.style.minHeight = "1060px";
+  // Balanced symmetric padding on both left and right (35px each)
+  clone.style.padding = "36px 36px 40px 36px";
   clone.style.boxShadow = "none";
   clone.style.border = "none";
   clone.style.background = "#ffffff";
@@ -53,11 +54,13 @@ function createStagingContainer(invoiceElement) {
 }
 
 /**
- * Standard html2pdf options for crisp A4 vector output
+ * Standard html2pdf options for centered A4 vector output
+ * Uses balanced 8mm margins on left and right to center content perfectly.
  */
 function getPdfOptions(safeFilename) {
   return {
-    margin: [0, 0, 0, 0],
+    // [top, left, bottom, right] - balanced 8mm margins on both left and right
+    margin: [8, 8, 8, 8],
     filename: safeFilename,
     image: { type: "jpeg", quality: 0.98 },
     html2canvas: {
@@ -65,8 +68,7 @@ function getPdfOptions(safeFilename) {
       useCORS: true,
       logging: false,
       letterRendering: true,
-      windowWidth: 794,
-      width: 794,
+      backgroundColor: "#ffffff",
       scrollX: 0,
       scrollY: 0
     },
@@ -86,12 +88,17 @@ export async function generatePdfBlob(invoiceElement, invoiceNumber = "Invoice")
     return null;
   }
 
+  // Preserve scroll position to avoid coordinate offset
+  const prevScrollX = window.scrollX || window.pageXOffset || 0;
+  const prevScrollY = window.scrollY || window.pageYOffset || 0;
+  window.scrollTo(0, 0);
+
   const staging = createStagingContainer(invoiceElement);
   document.body.appendChild(staging);
 
   try {
     // Allow browser a brief tick to layout the staging DOM
-    await new Promise((r) => setTimeout(r, 120));
+    await new Promise((r) => setTimeout(r, 150));
 
     const opt = getPdfOptions(safeFilename);
     const worker = window.html2pdf().set(opt).from(staging.firstElementChild);
@@ -113,6 +120,7 @@ export async function generatePdfBlob(invoiceElement, invoiceNumber = "Invoice")
     if (staging && staging.parentNode) {
       staging.parentNode.removeChild(staging);
     }
+    window.scrollTo(prevScrollX, prevScrollY);
   }
 }
 
@@ -123,11 +131,15 @@ export async function downloadPDF(invoiceElement, invoiceNumber = "Invoice") {
   const safeFilename = `Invoice_${String(invoiceNumber).replace(/[\/\\: ]/g, "_")}.pdf`;
 
   if (typeof window.html2pdf === "function") {
+    const prevScrollX = window.scrollX || window.pageXOffset || 0;
+    const prevScrollY = window.scrollY || window.pageYOffset || 0;
+    window.scrollTo(0, 0);
+
     const staging = createStagingContainer(invoiceElement);
     document.body.appendChild(staging);
 
     try {
-      await new Promise((r) => setTimeout(r, 120));
+      await new Promise((r) => setTimeout(r, 150));
       const opt = getPdfOptions(safeFilename);
       await window.html2pdf().set(opt).from(staging.firstElementChild).save();
       return true;
@@ -139,6 +151,7 @@ export async function downloadPDF(invoiceElement, invoiceNumber = "Invoice") {
       if (staging && staging.parentNode) {
         staging.parentNode.removeChild(staging);
       }
+      window.scrollTo(prevScrollX, prevScrollY);
     }
   } else {
     // Direct browser print engine fallback
