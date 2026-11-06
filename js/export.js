@@ -1,10 +1,9 @@
 /**
  * Universal Invoice Export & Sharing Suite
- * - Reliable A4 PDF generation (fixes blank canvas, alignment & cropping issues)
- * - Perfectly centered PDF on A4 paper with balanced margins
+ * - Reliable A4 PDF generation (centered, no clipping, balanced margins)
+ * - Rock-solid Word (.doc) export (UTF-8, Word XML compliant, never blank)
  * - Direct PDF File Sharing via Web Share API
  * - Interactive Share Modal with WhatsApp, Email & Clipboard
- * - Word (.doc) document export with full table styling
  * - Direct Print Engine with guaranteed visibility
  */
 
@@ -38,7 +37,7 @@ function createStagingContainer(invoiceElement) {
   clone.style.marginBottom = "0";
   clone.style.width = "760px";
   clone.style.minHeight = "1060px";
-  // Balanced symmetric padding on both left and right (35px each)
+  // Balanced symmetric padding on both left and right (36px each)
   clone.style.padding = "36px 36px 40px 36px";
   clone.style.boxShadow = "none";
   clone.style.border = "none";
@@ -59,7 +58,6 @@ function createStagingContainer(invoiceElement) {
  */
 function getPdfOptions(safeFilename) {
   return {
-    // [top, left, bottom, right] - balanced 8mm margins on both left and right
     margin: [8, 8, 8, 8],
     filename: safeFilename,
     image: { type: "jpeg", quality: 0.98 },
@@ -247,226 +245,303 @@ export function openShareModal(data, calc, filename, pdfDownloaded = false) {
 
 /**
  * Generate Microsoft Word / Google Docs compatible (.doc) file
+ * Uses full HTML5/Word XML with UTF-8 BOM, safe blob creation,
+ * and 60-second URL lifetime so downloads never fail or arrive blank.
  */
 export function downloadDOC(data, calc) {
-  const filename = `Invoice_${String(data.invoiceNumber || "Invoice").replace(/[\/\\: ]/g, "_")}.doc`;
+  const safeTitle = (data.invoiceTitle || "Invoice").replace(/[\/\\: ]/g, "_");
+  const safeNo = (data.invoiceNumber || "Draft").replace(/[\/\\: ]/g, "_");
+  const filename = `${safeTitle}_${safeNo}.doc`;
 
-  const itemsRows = data.items
-    .map(
-      (item) => `
-    <tr>
-      <td style="border: 1px solid #333; padding: 8px 10px; font-size: 11pt;">${escapeHtml(item.description || "Item")}</td>
-      <td style="border: 1px solid #333; padding: 8px 10px; text-align: right; font-size: 11pt;">${data.currency} ${formatNumber(item.rate)}</td>
-      <td style="border: 1px solid #333; padding: 8px 10px; text-align: center; font-size: 11pt;">${item.quantity}</td>
-      <td style="border: 1px solid #333; padding: 8px 10px; text-align: right; font-size: 11pt; font-weight: bold;">${data.currency} ${formatNumber(item.rate * item.quantity)}</td>
-    </tr>`
-    )
+  const currency = data.currency || "₹";
+  const items = Array.isArray(data.items) ? data.items : [];
+
+  // Build items rows safely
+  const itemsHtml = items
+    .map((item) => {
+      const rate = Number(item.rate) || 0;
+      const qty = Number(item.quantity) || 0;
+      const total = rate * qty;
+      return `
+      <tr>
+        <td style="border: 1px solid #333333; padding: 8px 10px; font-size: 10.5pt; text-align: left; vertical-align: top;">
+          ${escapeHtml(item.description || "Item")}
+          ${item.hsn ? `<br><span style="font-size: 9pt; color: #64748b;">HSN/SAC: ${escapeHtml(item.hsn)}</span>` : ""}
+        </td>
+        <td style="border: 1px solid #333333; padding: 8px 10px; font-size: 10.5pt; text-align: right; vertical-align: top; white-space: nowrap;">
+          ${currency} ${formatNumber(rate)}
+        </td>
+        <td style="border: 1px solid #333333; padding: 8px 10px; font-size: 10.5pt; text-align: center; vertical-align: top;">
+          ${qty}
+        </td>
+        <td style="border: 1px solid #333333; padding: 8px 10px; font-size: 10.5pt; text-align: right; vertical-align: top; font-weight: bold; white-space: nowrap;">
+          ${currency} ${formatNumber(total)}
+        </td>
+      </tr>`;
+    })
     .join("");
 
-  // Optional empty rows to match classic aesthetic
+  // Empty spacer rows matching sample aesthetic
   const emptyRows = `
     <tr>
-      <td style="border: 1px solid #333; padding: 14px 10px;">&nbsp;</td>
-      <td style="border: 1px solid #333; padding: 14px 10px;">&nbsp;</td>
-      <td style="border: 1px solid #333; padding: 14px 10px;">&nbsp;</td>
-      <td style="border: 1px solid #333; padding: 14px 10px;">&nbsp;</td>
+      <td style="border: 1px solid #333333; height: 26px;">&nbsp;</td>
+      <td style="border: 1px solid #333333;">&nbsp;</td>
+      <td style="border: 1px solid #333333;">&nbsp;</td>
+      <td style="border: 1px solid #333333;">&nbsp;</td>
     </tr>
     <tr>
-      <td style="border: 1px solid #333; padding: 14px 10px;">&nbsp;</td>
-      <td style="border: 1px solid #333; padding: 14px 10px;">&nbsp;</td>
-      <td style="border: 1px solid #333; padding: 14px 10px;">&nbsp;</td>
-      <td style="border: 1px solid #333; padding: 14px 10px;">&nbsp;</td>
+      <td style="border: 1px solid #333333; height: 26px;">&nbsp;</td>
+      <td style="border: 1px solid #333333;">&nbsp;</td>
+      <td style="border: 1px solid #333333;">&nbsp;</td>
+      <td style="border: 1px solid #333333;">&nbsp;</td>
     </tr>
   `;
 
   // Tax rows
-  let taxRows = "";
-  if (data.tax.enabled && calc.taxAmount > 0) {
+  let taxHtml = "";
+  if (data.tax && data.tax.enabled && calc && calc.taxAmount > 0) {
     if (data.tax.mode === "intra") {
       const halfRate = (calc.gstRate / 2).toFixed(1);
-      taxRows = `
+      taxHtml = `
         <tr>
-          <td colspan="3" style="border: 1px solid #333; padding: 6px 10px; text-align: right; font-size: 10pt;">CGST (${halfRate}%):</td>
-          <td style="border: 1px solid #333; padding: 6px 10px; text-align: right; font-size: 10pt;">${data.currency} ${formatNumber(calc.cgst)}</td>
+          <td colspan="3" style="border: 1px solid #333333; padding: 6px 10px; text-align: right; font-size: 10pt;">CGST (${halfRate}%):</td>
+          <td style="border: 1px solid #333333; padding: 6px 10px; text-align: right; font-size: 10pt; font-weight: bold;">${currency} ${formatNumber(calc.cgst)}</td>
         </tr>
         <tr>
-          <td colspan="3" style="border: 1px solid #333; padding: 6px 10px; text-align: right; font-size: 10pt;">SGST (${halfRate}%):</td>
-          <td style="border: 1px solid #333; padding: 6px 10px; text-align: right; font-size: 10pt;">${data.currency} ${formatNumber(calc.sgst)}</td>
+          <td colspan="3" style="border: 1px solid #333333; padding: 6px 10px; text-align: right; font-size: 10pt;">SGST (${halfRate}%):</td>
+          <td style="border: 1px solid #333333; padding: 6px 10px; text-align: right; font-size: 10pt; font-weight: bold;">${currency} ${formatNumber(calc.sgst)}</td>
         </tr>
       `;
     } else {
-      taxRows = `
+      taxHtml = `
         <tr>
-          <td colspan="3" style="border: 1px solid #333; padding: 6px 10px; text-align: right; font-size: 10pt;">IGST (${calc.gstRate}%):</td>
-          <td style="border: 1px solid #333; padding: 6px 10px; text-align: right; font-size: 10pt;">${data.currency} ${formatNumber(calc.igst)}</td>
+          <td colspan="3" style="border: 1px solid #333333; padding: 6px 10px; text-align: right; font-size: 10pt;">IGST (${calc.gstRate}%):</td>
+          <td style="border: 1px solid #333333; padding: 6px 10px; text-align: right; font-size: 10pt; font-weight: bold;">${currency} ${formatNumber(calc.igst)}</td>
         </tr>
       `;
     }
   }
 
-  const wordContent = `
-    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-    <head>
-      <meta charset='utf-8'>
-      <!--[if gte mso 9]>
-      <xml>
-        <w:WordDocument>
-          <w:View>Print</w:View>
-          <w:Zoom>100</w:Zoom>
-          <w:DoNotOptimizeForBrowser/>
-        </w:WordDocument>
-      </xml>
-      <![endif]-->
-      <style>
-        @page Section1 {
-          size: 595.3pt 841.9pt; /* A4 */
-          margin: 40pt 45pt 40pt 45pt;
-          mso-header-margin: 36pt;
-          mso-footer-margin: 36pt;
-          mso-paper-source: 0;
-        }
-        div.Section1 { page: Section1; }
-        body {
-          font-family: 'Calibri', 'Arial', sans-serif;
-          color: #111;
-          background: #ffffff;
-          line-height: 1.3;
-        }
-        h1 { font-size: 24pt; margin: 0 0 10pt 0; text-align: center; font-weight: normal; }
-        table { border-collapse: collapse; width: 100%; margin-top: 12pt; }
-        .meta-table td { border: none; padding: 2px 4px; font-size: 10pt; }
-        .query-box {
-          background-color: #d8edf8;
-          border: 1px solid #bce8f1;
-          color: #0c5460;
-          padding: 8pt 12pt;
-          font-size: 9.5pt;
-          font-weight: bold;
-          margin-top: 20pt;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="Section1">
-        <h1>${escapeHtml(data.invoiceTitle || "Invoice")}</h1>
+  const isTaxOrDiscountActive = (data.tax && data.tax.enabled) || (calc && calc.discountAmount > 0);
+  const totalLabel = isTaxOrDiscountActive ? "Subtotal (Taxable Value)" : "Total";
+  const subtotalVal = calc ? calc.subtotal : 0;
+  const grandTotalVal = calc ? calc.grandTotal : subtotalVal;
 
-        <table style="width: 100%; border: none; margin-bottom: 25pt;">
+  const wordContent = `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <title>${escapeHtml(data.invoiceTitle || "Invoice")}</title>
+  <!--[if gte mso 9]>
+  <xml>
+    <w:WordDocument>
+      <w:View>Print</w:View>
+      <w:Zoom>100</w:Zoom>
+      <w:DoNotOptimizeForBrowser/>
+    </w:WordDocument>
+  </xml>
+  <![endif]-->
+  <style>
+    @page {
+      size: 21.0cm 29.7cm;
+      margin: 2.0cm 2.0cm 2.0cm 2.0cm;
+      mso-page-orientation: portrait;
+    }
+    body {
+      font-family: Arial, 'Segoe UI', Helvetica, sans-serif;
+      font-size: 10pt;
+      color: #111111;
+      line-height: 1.4;
+      background-color: #ffffff;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      font-size: 22pt;
+      font-weight: normal;
+      text-align: center;
+      margin: 0 0 16pt 0;
+      color: #000000;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10pt;
+      margin-bottom: 10pt;
+    }
+    .header-table td {
+      border: none;
+      vertical-align: top;
+      padding: 0;
+    }
+    .items-table {
+      width: 100%;
+      border: 1px solid #222222;
+      border-collapse: collapse;
+      margin-top: 12pt;
+      margin-bottom: 12pt;
+    }
+    .items-table th {
+      background-color: #dbeafe;
+      border: 1px solid #222222;
+      padding: 7pt 8pt;
+      font-size: 9.5pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      color: #0f172a;
+    }
+    .items-table td {
+      border: 1px solid #222222;
+      padding: 7pt 8pt;
+      font-size: 10pt;
+    }
+    .query-box {
+      background-color: #dbeafe;
+      border: 1px solid #bfdbfe;
+      color: #0369a1;
+      padding: 8pt 12pt;
+      font-size: 9.5pt;
+      font-weight: bold;
+      margin-top: 14pt;
+      margin-bottom: 14pt;
+    }
+    .notes-box {
+      margin-top: 10pt;
+      font-size: 9.5pt;
+    }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(data.invoiceTitle || "Invoice")}</h1>
+
+  <!-- Header Info -->
+  <table class="header-table" style="width: 100%; margin-bottom: 18pt;">
+    <tr>
+      <td style="width: 55%; vertical-align: top;">
+        <div style="font-weight: bold; font-size: 11pt; text-transform: uppercase; margin-bottom: 3pt;">${escapeHtml(data.company.name || "")}</div>
+        <div style="white-space: pre-line; color: #333333;">${escapeHtml(data.company.address || "")}</div>
+        ${data.company.phone ? `<div style="margin-top: 3pt;">Mob. No: ${escapeHtml(data.company.phone)}</div>` : ""}
+        ${data.company.email ? `<div>E-mail: ${escapeHtml(data.company.email)}</div>` : ""}
+        ${data.company.gstin ? `<div>GSTIN: ${escapeHtml(data.company.gstin)}</div>` : ""}
+      </td>
+      <td style="width: 45%; vertical-align: top; text-align: right;">
+        <table style="width: auto; margin-left: auto; border: none;">
           <tr>
-            <td style="width: 55%; vertical-align: top; border: none; font-size: 10pt;">
-              <p style="font-weight: bold; font-size: 11pt; margin: 0 0 4pt 0;">${escapeHtml(data.company.name)}</p>
-              <p style="margin: 0; white-space: pre-line;">${escapeHtml(data.company.address)}</p>
-              ${data.company.phone ? `<p style="margin: 2pt 0 0 0;">Mob. No: ${escapeHtml(data.company.phone)}</p>` : ""}
-              ${data.company.email ? `<p style="margin: 2pt 0 0 0;">E-mail: ${escapeHtml(data.company.email)}</p>` : ""}
-              ${data.company.gstin ? `<p style="margin: 2pt 0 0 0;">GSTIN: ${escapeHtml(data.company.gstin)}</p>` : ""}
-            </td>
-            <td style="width: 45%; vertical-align: top; border: none; text-align: right; font-size: 10pt;">
-              <table style="width: auto; float: right; border: none;">
-                <tr>
-                  <td style="text-align: right; font-weight: bold; padding: 2pt 6pt; border: none;">Invoice No:</td>
-                  <td style="text-align: right; padding: 2pt 6pt; border: none;">${escapeHtml(data.invoiceNumber)}</td>
-                </tr>
-                <tr>
-                  <td style="text-align: right; font-weight: bold; padding: 2pt 6pt; border: none;">Date:</td>
-                  <td style="text-align: right; padding: 2pt 6pt; border: none;">${formatDisplayDate(data.invoiceDate)}</td>
-                </tr>
-                ${data.dueDate ? `
-                <tr>
-                  <td style="text-align: right; font-weight: bold; padding: 2pt 6pt; border: none;">Due Date:</td>
-                  <td style="text-align: right; padding: 2pt 6pt; border: none;">${formatDisplayDate(data.dueDate)}</td>
-                </tr>` : ""}
-              </table>
-            </td>
+            <td style="font-weight: bold; padding: 2pt 6pt; text-align: right; border: none;">Invoice No:</td>
+            <td style="padding: 2pt 6pt; text-align: right; border: none;">${escapeHtml(data.invoiceNumber || "")}</td>
           </tr>
-        </table>
-
-        <div style="margin-bottom: 16pt;">
-          <p style="font-weight: bold; font-size: 11pt; margin: 0 0 4pt 0;">Bill To:</p>
-          <p style="font-weight: bold; font-size: 10pt; margin: 0;">${escapeHtml(data.client.name)}</p>
-          <p style="margin: 2pt 0 0 0; font-size: 10pt; white-space: pre-line;">${escapeHtml(data.client.address)}</p>
-          ${data.client.phone ? `<p style="margin: 2pt 0 0 0; font-size: 10pt;">Contact: ${escapeHtml(data.client.phone)}</p>` : ""}
-          ${data.client.gstin ? `<p style="margin: 2pt 0 0 0; font-size: 10pt;">GSTIN: ${escapeHtml(data.client.gstin)}</p>` : ""}
-        </div>
-
-        <table style="width: 100%; border-collapse: collapse;">
-          <thead>
-            <tr style="background-color: #e6f2f8;">
-              <th style="border: 1px solid #333; padding: 8px 10px; text-align: left; font-size: 10pt; text-transform: uppercase;">DESCRIPTION</th>
-              <th style="border: 1px solid #333; padding: 8px 10px; text-align: right; font-size: 10pt; width: 110pt;">Amount</th>
-              <th style="border: 1px solid #333; padding: 8px 10px; text-align: center; font-size: 10pt; width: 75pt;">Quantity</th>
-              <th style="border: 1px solid #333; padding: 8px 10px; text-align: right; font-size: 10pt; width: 110pt;">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsRows}
-            ${emptyRows}
-            <tr>
-              <td colspan="3" style="border: 1px solid #333; padding: 8px 10px; text-align: left; font-weight: bold; font-size: 11pt;">Total</td>
-              <td style="border: 1px solid #333; padding: 8px 10px; text-align: right; font-weight: bold; font-size: 11pt;">${data.currency} ${formatNumber(calc.subtotal)}</td>
-            </tr>
-            ${taxRows}
-            ${calc.discountAmount > 0 ? `
-            <tr>
-              <td colspan="3" style="border: 1px solid #333; padding: 6px 10px; text-align: right; font-size: 10pt;">Discount:</td>
-              <td style="border: 1px solid #333; padding: 6px 10px; text-align: right; font-size: 10pt;">- ${data.currency} ${formatNumber(calc.discountAmount)}</td>
-            </tr>` : ""}
-            ${calc.roundOffDiff !== 0 ? `
-            <tr>
-              <td colspan="3" style="border: 1px solid #333; padding: 6px 10px; text-align: right; font-size: 10pt;">Round Off:</td>
-              <td style="border: 1px solid #333; padding: 6px 10px; text-align: right; font-size: 10pt;">${calc.roundOffDiff > 0 ? "+" : ""}${data.currency} ${formatNumber(calc.roundOffDiff)}</td>
-            </tr>` : ""}
-            ${data.tax.enabled || calc.discountAmount > 0 ? `
-            <tr style="background-color: #f7fafc;">
-              <td colspan="3" style="border: 1px solid #333; padding: 8px 10px; text-align: left; font-weight: bold; font-size: 11.5pt;">Grand Total</td>
-              <td style="border: 1px solid #333; padding: 8px 10px; text-align: right; font-weight: bold; font-size: 11.5pt;">${data.currency} ${formatNumber(calc.grandTotal)}</td>
-            </tr>` : ""}
-          </tbody>
-        </table>
-
-        ${calc.amountInWords ? `
-        <p style="margin: 6pt 0 16pt 0; font-size: 9.5pt; color: #444; font-style: italic;">
-          <strong>Amount in Words:</strong> ${escapeHtml(calc.amountInWords)}
-        </p>` : ""}
-
-        ${data.notes ? `
-        <div style="margin-top: 14pt;">
-          <p style="font-weight: bold; font-size: 10pt; margin: 0 0 4pt 0;">Note :</p>
-          <div style="margin-left: 20pt; font-size: 9.5pt; line-height: 1.4; white-space: pre-line;">${escapeHtml(data.notes)}</div>
-        </div>` : ""}
-
-        ${data.queryBanner ? `
-        <div class="query-box">
-          ${escapeHtml(data.queryBanner)}
-        </div>` : ""}
-
-        <table style="width: 100%; border: none; margin-top: 30pt;">
           <tr>
-            <td style="width: 50%; vertical-align: bottom; border: none;">
-              <p style="font-weight: bold; font-size: 10pt; margin: 0;">${escapeHtml(data.thankYouMessage || "THANK YOU FOR YOUR BUSINESS...!")}</p>
-            </td>
-            <td style="width: 50%; vertical-align: bottom; text-align: right; border: none;">
-              <p style="margin: 0 0 25pt 0; font-size: 9.5pt; color: #666;">For ${escapeHtml(data.company.name)}</p>
-              <p style="font-size: 10pt; font-weight: bold; margin: 0;">${escapeHtml(data.signatoryText || data.company.name)}</p>
-              <p style="font-size: 8.5pt; color: #777; margin: 2pt 0 0 0;">Authorized Signatory</p>
-            </td>
+            <td style="font-weight: bold; padding: 2pt 6pt; text-align: right; border: none;">Date:</td>
+            <td style="padding: 2pt 6pt; text-align: right; border: none;">${formatDisplayDate(data.invoiceDate)}</td>
           </tr>
+          ${data.dueDate ? `
+          <tr>
+            <td style="font-weight: bold; padding: 2pt 6pt; text-align: right; border: none;">Due Date:</td>
+            <td style="padding: 2pt 6pt; text-align: right; border: none;">${formatDisplayDate(data.dueDate)}</td>
+          </tr>` : ""}
         </table>
-      </div>
-    </body>
-    </html>
-  `;
+      </td>
+    </tr>
+  </table>
 
+  <!-- Bill To -->
+  <div style="margin-bottom: 14pt;">
+    <div style="font-weight: bold; font-size: 10.5pt; margin-bottom: 2pt;">Bill To:</div>
+    <div style="font-weight: bold; font-size: 10pt;">${escapeHtml(data.client.name || "")}</div>
+    <div style="white-space: pre-line; color: #333333;">${escapeHtml(data.client.address || "")}</div>
+    ${data.client.phone ? `<div>Contact: ${escapeHtml(data.client.phone)}</div>` : ""}
+    ${data.client.gstin ? `<div>GSTIN: ${escapeHtml(data.client.gstin)}</div>` : ""}
+  </div>
+
+  <!-- Items Table -->
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="text-align: left; width: 50%;">DESCRIPTION</th>
+        <th style="text-align: right; width: 17%;">Amount</th>
+        <th style="text-align: center; width: 13%;">Quantity</th>
+        <th style="text-align: right; width: 20%;">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsHtml}
+      ${emptyRows}
+      <tr>
+        <td colspan="3" style="font-weight: bold; font-size: 10.5pt;">${totalLabel}</td>
+        <td style="font-weight: bold; font-size: 10.5pt; text-align: right;">${currency} ${formatNumber(subtotalVal)}</td>
+      </tr>
+      ${taxHtml}
+      ${calc && calc.discountAmount > 0 ? `
+      <tr>
+        <td colspan="3" style="text-align: right; font-size: 10pt;">Discount:</td>
+        <td style="text-align: right; font-size: 10pt; font-weight: bold;">- ${currency} ${formatNumber(calc.discountAmount)}</td>
+      </tr>` : ""}
+      ${calc && calc.roundOffDiff !== 0 ? `
+      <tr>
+        <td colspan="3" style="text-align: right; font-size: 9.5pt;">Round Off:</td>
+        <td style="text-align: right; font-size: 9.5pt;">${calc.roundOffDiff > 0 ? "+" : ""}${currency} ${formatNumber(calc.roundOffDiff)}</td>
+      </tr>` : ""}
+      ${isTaxOrDiscountActive ? `
+      <tr style="background-color: #f8fafc;">
+        <td colspan="3" style="font-weight: bold; font-size: 11pt;">Grand Total</td>
+        <td style="font-weight: bold; font-size: 11pt; text-align: right;">${currency} ${formatNumber(grandTotalVal)}</td>
+      </tr>` : ""}
+    </tbody>
+  </table>
+
+  <!-- Amount in Words -->
+  ${calc && calc.amountInWords ? `
+  <div style="font-size: 9.5pt; color: #475569; font-style: italic; margin-top: 4pt; margin-bottom: 12pt;">
+    <strong style="font-style: normal; color: #1e293b;">Amount in Words:</strong> ${escapeHtml(calc.amountInWords)}
+  </div>` : ""}
+
+  <!-- Notes -->
+  ${data.notes ? `
+  <div class="notes-box">
+    <div style="font-weight: bold; margin-bottom: 2pt;">Note :</div>
+    <div style="margin-left: 15pt; white-space: pre-line;">${escapeHtml(data.notes)}</div>
+  </div>` : ""}
+
+  <!-- Query Box -->
+  ${data.queryBanner ? `
+  <div class="query-box">
+    ${escapeHtml(data.queryBanner)}
+  </div>` : ""}
+
+  <!-- Signoff Section -->
+  <table style="width: 100%; border: none; margin-top: 25pt;">
+    <tr>
+      <td style="width: 50%; vertical-align: bottom; border: none;">
+        <div style="font-weight: bold; font-size: 10pt;">${escapeHtml(data.thankYouMessage || "THANK YOU FOR YOUR BUSINESS...!")}</div>
+      </td>
+      <td style="width: 50%; vertical-align: bottom; text-align: right; border: none;">
+        <div style="font-size: 9pt; color: #666666; margin-bottom: 20pt;">For ${escapeHtml(data.company.name || "")}</div>
+        <div style="font-weight: bold; font-size: 10.5pt;">${escapeHtml(data.signatoryText || data.company.name || "")}</div>
+        <div style="font-size: 8.5pt; color: #777777;">Authorized Signatory</div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  // Safe Blob creation with UTF-8 BOM
   const blob = new Blob(["\ufeff", wordContent], {
-    type: "application/msword;charset=utf-8"
+    type: "application/msword"
   });
 
+  // Long-lived object URL to prevent premature revocation and 0-byte blank downloads
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  a.style.display = "none";
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1500);
+
+  setTimeout(() => {
+    if (a.parentNode) a.parentNode.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 60000);
 }
 
 /**
@@ -487,7 +562,7 @@ export function shareViaWhatsApp(data, calc) {
  */
 export function formatShareSummary(data, calc) {
   let taxDetails = "";
-  if (data.tax.enabled && calc.taxAmount > 0) {
+  if (data.tax && data.tax.enabled && calc && calc.taxAmount > 0) {
     if (data.tax.mode === "intra") {
       taxDetails = `\nCGST: ${data.currency} ${formatNumber(calc.cgst)}\nSGST: ${data.currency} ${formatNumber(calc.sgst)}`;
     } else {
@@ -495,14 +570,17 @@ export function formatShareSummary(data, calc) {
     }
   }
 
-  return `📄 *${data.invoiceTitle || "INVOICE"} #${data.invoiceNumber}*
+  const subtotal = calc ? calc.subtotal : 0;
+  const grandTotal = calc ? calc.grandTotal : subtotal;
+
+  return `📄 *${data.invoiceTitle || "INVOICE"} #${data.invoiceNumber || ""}*
 📅 *Date:* ${formatDisplayDate(data.invoiceDate)}
-🏢 *From:* ${data.company.name}
-👤 *Billed To:* ${data.client.name}
+🏢 *From:* ${data.company.name || ""}
+👤 *Billed To:* ${data.client.name || ""}
 ━━━━━━━━━━━━━━━━━━
-💰 *Subtotal:* ${data.currency} ${formatNumber(calc.subtotal)}${taxDetails}
-🏷️ *Grand Total:* ${data.currency} ${formatNumber(calc.grandTotal)}
-📝 *In Words:* ${calc.amountInWords || ""}
+💰 *Subtotal:* ${data.currency} ${formatNumber(subtotal)}${taxDetails}
+🏷️ *Grand Total:* ${data.currency} ${formatNumber(grandTotal)}
+📝 *In Words:* ${calc?.amountInWords || ""}
 ━━━━━━━━━━━━━━━━━━
 ${data.queryBanner ? `${data.queryBanner}\n` : ""}${data.thankYouMessage || "THANK YOU FOR YOUR BUSINESS...!"}`;
 }

@@ -417,6 +417,29 @@
           </div>
         </div>
 
+        <!-- Card 8: Aligned Bottom Actions for Form Editor -->
+        <div class="form-section-card bg-slate-50/90 border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-200">
+            <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <span>⚡</span> Quick Actions
+            </span>
+            <button id="btn-bottom-save" type="button" class="text-xs font-semibold text-slate-600 hover:text-sky-600 flex items-center gap-1">
+              <span>💾</span> Save Draft
+            </button>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <button id="btn-bottom-pdf" type="button" class="py-2.5 px-3 text-xs font-bold rounded-xl text-white bg-sky-600 hover:bg-sky-700 shadow flex items-center justify-center gap-1.5 transition-all">
+              <span>📄</span> Download PDF
+            </button>
+            <button id="btn-bottom-doc" type="button" class="py-2.5 px-3 text-xs font-bold rounded-xl text-sky-800 bg-sky-100 hover:bg-sky-200 flex items-center justify-center gap-1.5 transition-all">
+              <span>📝</span> Word DOC
+            </button>
+            <button id="btn-bottom-share" type="button" class="py-2.5 px-3 text-xs font-bold rounded-xl text-emerald-800 bg-emerald-100 hover:bg-emerald-200 flex items-center justify-center gap-1.5 transition-all">
+              <span>📲</span> Share PDF
+            </button>
+          </div>
+        </div>
+
       </section>
 
       <!-- ====================================================================
@@ -566,12 +589,12 @@ Dehuraod, Pune 412101</div>
 
             </div>
 
-            <!-- Paper Bottom Section: Closing & Signature -->
+            <!-- Paper Bottom Section: Closing & Signature (Cleanly Aligned) -->
             <div class="pt-8">
               <div class="flex justify-between items-end">
                 
                 <!-- Left: Thank You message -->
-                <div class="w-1/2">
+                <div class="w-1/2 pb-1">
                   <div id="preview-thank-you" class="font-bold text-[13px] text-slate-900 tracking-wide uppercase">
                     THANK YOU FOR YOUR BUSINESS...!
                   </div>
@@ -583,7 +606,7 @@ Dehuraod, Pune 412101</div>
                   <div id="preview-signature-img-wrap" class="mb-1 hidden inline-block">
                     <img id="preview-signature-img" src="" alt="Signature" class="max-h-12 max-w-[140px] object-contain ml-auto">
                   </div>
-                  <div class="text-[12px] text-slate-500 mb-6" id="preview-for-company">For SYNCROTECH TECHNOLOGIES LLP</div>
+                  <div class="text-[12px] text-slate-500 mb-1" id="preview-for-company">For SYNCROTECH TECHNOLOGIES LLP</div>
                   <div id="preview-signatory-name" class="font-bold text-[13.5px] text-slate-900">Syncrotech Technologies LLP</div>
                   <div class="text-[11px] text-slate-500">Authorized Signatory</div>
                 </div>
@@ -599,17 +622,19 @@ Dehuraod, Pune 412101</div>
     </div>
   </main>
 
-  <!-- Mobile Floating Sticky Action Bar -->
-  <aside class="mobile-action-bar no-print justify-between items-center gap-2">
-    <button id="mobile-btn-doc" type="button" class="flex-1 py-2.5 text-xs font-bold rounded-xl text-sky-800 bg-sky-100 flex items-center justify-center gap-1 active:bg-sky-200">
-      <span>📝</span> Word DOC
-    </button>
-    <button id="mobile-btn-pdf" type="button" class="flex-1 py-2.5 text-xs font-bold rounded-xl text-white bg-sky-600 shadow flex items-center justify-center gap-1 active:bg-sky-700">
-      <span>📄</span> PDF
-    </button>
-    <button id="mobile-btn-share" type="button" class="flex-1 py-2.5 text-xs font-bold rounded-xl text-emerald-800 bg-emerald-100 flex items-center justify-center gap-1 active:bg-emerald-200">
-      <span>📲</span> Share PDF
-    </button>
+  <!-- Mobile Floating Sticky Action Bar (Centered & Aligned) -->
+  <aside class="mobile-action-bar no-print">
+    <div class="flex items-center justify-between gap-2.5 w-full max-w-md mx-auto">
+      <button id="mobile-btn-doc" type="button" class="flex-1 py-2.5 text-xs font-bold rounded-xl text-sky-800 bg-sky-100 hover:bg-sky-200 flex items-center justify-center gap-1.5 transition-all shadow-sm">
+        <span>📝</span> Word DOC
+      </button>
+      <button id="mobile-btn-pdf" type="button" class="flex-1 py-2.5 text-xs font-bold rounded-xl text-white bg-sky-600 hover:bg-sky-700 shadow flex items-center justify-center gap-1.5 transition-all">
+        <span>📄</span> PDF
+      </button>
+      <button id="mobile-btn-share" type="button" class="flex-1 py-2.5 text-xs font-bold rounded-xl text-emerald-800 bg-emerald-100 hover:bg-emerald-200 flex items-center justify-center gap-1.5 transition-all shadow-sm">
+        <span>📲</span> Share PDF
+      </button>
+    </div>
   </aside>
 
   <!-- Share Invoice & PDF Modal -->

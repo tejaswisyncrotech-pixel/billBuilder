@@ -394,15 +394,24 @@ function initEventListeners() {
     }
   };
 
-  // Bind desktop & mobile export triggers
+  // Bind desktop, mobile & bottom editor export triggers
   bindClick("btn-download-pdf", handlePdfDownload);
   bindClick("mobile-btn-pdf", handlePdfDownload);
+  bindClick("btn-bottom-pdf", handlePdfDownload);
 
   bindClick("btn-download-doc", handleDocDownload);
   bindClick("mobile-btn-doc", handleDocDownload);
+  bindClick("btn-bottom-doc", handleDocDownload);
 
   bindClick("btn-share", handleShare);
   bindClick("mobile-btn-share", handleShare);
+  bindClick("btn-bottom-share", handleShare);
+
+  bindClick("btn-bottom-save", () => {
+    const saveBtn = document.getElementById("btn-save-current");
+    if (saveBtn) saveBtn.click();
+    else showToast("Draft saved!");
+  });
 
   bindClick("btn-print-direct", printInvoice);
 

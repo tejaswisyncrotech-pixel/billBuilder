@@ -215,16 +215,18 @@ body {
 @media screen and (max-width: 768px) {
   .mobile-action-bar {
     display: flex;
+    justify-content: center;
+    align-items: center;
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
     background: #ffffff;
     border-top: 1px solid #e2e8f0;
-    padding: 0.65rem 0.75rem;
+    padding: 0.65rem 1rem;
     padding-bottom: calc(0.65rem + env(safe-area-inset-bottom, 0px));
     z-index: 50;
-    box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.06);
   }
   
   .main-content-container {
